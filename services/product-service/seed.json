@@ -1,0 +1,75 @@
+[
+  {
+    "model": "catalog.category",
+    "pk": 1,
+    "fields": { "name": "Smartphone", "slug": "smartphone" }
+  },
+  {
+    "model": "catalog.category",
+    "pk": 2,
+    "fields": { "name": "Laptop", "slug": "laptop" }
+  },
+  {
+    "model": "catalog.category",
+    "pk": 3,
+    "fields": { "name": "Tablet", "slug": "tablet" }
+  },
+  {
+    "model": "catalog.category",
+    "pk": 4,
+    "fields": { "name": "Smartwatch", "slug": "smartwatch" }
+  },
+  {
+    "model": "catalog.category",
+    "pk": 5,
+    "fields": { "name": "Audio", "slug": "audio" }
+  },
+  {
+    "model": "catalog.category",
+    "pk": 6,
+    "fields": { "name": "Accessories", "slug": "accessories" }
+  },
+  {
+    "model": "catalog.product",
+    "pk": 1,
+    "fields": {
+      "sku": "IP14-128-BLK",
+      "name": "iPhone 14 128GB Black",
+      "description": "Apple smartphone with 128GB storage.",
+      "price": "699.00",
+      "currency": "USD",
+      "category": 1,
+      "is_active": true,
+      "created_at": "2026-04-13T00:00:00Z"
+    }
+  },
+  {
+    "model": "catalog.product",
+    "pk": 2,
+    "fields": {
+      "sku": "XM-RN13-256",
+      "name": "Xiaomi Redmi Note 13 256GB",
+      "description": "Affordable Android smartphone.",
+      "price": "249.00",
+      "currency": "USD",
+      "category": 1,
+      "is_active": true,
+      "created_at": "2026-04-13T00:00:00Z"
+    }
+  },
+  {
+    "model": "catalog.product",
+    "pk": 3,
+    "fields": {
+      "sku": "LAP-GAME-15",
+      "name": "Gaming Laptop 15-inch",
+      "description": "Laptop for gaming and high performance workloads.",
+      "price": "1299.00",
+      "currency": "USD",
+      "category": 2,
+      "is_active": true,
+      "created_at": "2026-04-13T00:00:00Z"
+    }
+  }
+]
+

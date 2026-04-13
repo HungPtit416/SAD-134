@@ -1,0 +1,128 @@
+name: sad-ecommerce
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_MULTIPLE_DATABASES: product_db,cart_db,order_db,user_db,inventory_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+    ports:
+      - "5432:5432"
+
+  product-service:
+    build: ./services/product-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: product_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      CORS_ALLOW_ALL_ORIGINS: "1"
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8000"
+
+  cart-service:
+    build: ./services/cart-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: cart_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      PRODUCT_SERVICE_URL: http://product-service:8000
+      INVENTORY_SERVICE_URL: http://inventory-service:8000
+      CORS_ALLOW_ALL_ORIGINS: "1"
+    depends_on:
+      - postgres
+      - product-service
+    ports:
+      - "8002:8000"
+
+  order-service:
+    build: ./services/order-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: order_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      CART_SERVICE_URL: http://cart-service:8000
+      PRODUCT_SERVICE_URL: http://product-service:8000
+      CORS_ALLOW_ALL_ORIGINS: "1"
+    depends_on:
+      - postgres
+      - cart-service
+      - product-service
+    ports:
+      - "8003:8000"
+
+  user-service:
+    build: ./services/user-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: user_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      CORS_ALLOW_ALL_ORIGINS: "1"
+    depends_on:
+      - postgres
+    ports:
+      - "8004:8000"
+
+  inventory-service:
+    build: ./services/inventory-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: inventory_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      CORS_ALLOW_ALL_ORIGINS: "1"
+      PRODUCT_SERVICE_URL: http://product-service:8000
+    depends_on:
+      - postgres
+    ports:
+      - "8005:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_PRODUCT_API_BASE: http://localhost:8001
+        VITE_CART_API_BASE: http://localhost:8002
+        VITE_ORDER_API_BASE: http://localhost:8003
+        VITE_INVENTORY_API_BASE: http://localhost:8005
+        VITE_USER_API_BASE: http://localhost:8004
+    depends_on:
+      - product-service
+      - cart-service
+      - order-service
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:
+
