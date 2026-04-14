@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { addToCart, getProduct } from '../api'
+import { addToCart, getProduct, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import { money } from '../lib/format'
 
@@ -16,7 +16,9 @@ export default function ProductDetail() {
     setLoading(true)
     setError('')
     try {
-      setProduct(await getProduct(id))
+      const p = await getProduct(id)
+      setProduct(p)
+      trackEvent(userId, 'view', { product_id: p?.id, metadata: { source: 'product_detail' } })
     } catch (e) {
       setError(e?.message || 'Failed to load product')
     } finally {
@@ -26,7 +28,7 @@ export default function ProductDetail() {
 
   useEffect(() => {
     load()
-  }, [id])
+  }, [id, userId])
 
   async function onAdd() {
     setLoading(true)
@@ -55,7 +57,7 @@ export default function ProductDetail() {
       <div className="detailCard">
         <div className="detailMedia">
           <div className="detailPlaceholder">
-            <div className="phBrand">SAD Shop</div>
+            <div className="phBrand">ElecShop</div>
             <div className="phName">{product?.name || 'Loading...'}</div>
           </div>
         </div>

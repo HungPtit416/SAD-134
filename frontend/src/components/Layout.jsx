@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from './Auth'
+import ChatWidget from './ChatWidget'
 
 export function useUserId() {
   const { auth } = useAuth()
@@ -22,21 +23,10 @@ export default function Layout() {
   const { auth, logout } = useAuth()
   return (
     <div className="appShell">
-      <div className="topPromo">
-        <div className="container promoInner">
-          <div className="promoLeft">
-            <span className="promoBadge">SAD</span>
-            <span>E-commerce Microservices Demo</span>
-          </div>
-          <div className="promoRight"></div>
-        </div>
-      </div>
-
       <header className="header">
         <div className="container headerInner">
           <div className="brand">
-            <div className="brandName">SAD Shop</div>
-            <div className="brandTag">Docker • Django microservices • Frontend</div>
+            <div className="brandName">ElecShop</div>
           </div>
           <nav className="nav">
             <TopLink to="/">Products</TopLink>
@@ -65,6 +55,8 @@ export default function Layout() {
           <div>User: {auth?.email || 'guest'}</div>
         </div>
       </footer>
+
+      <ChatWidget />
     </div>
   )
 }

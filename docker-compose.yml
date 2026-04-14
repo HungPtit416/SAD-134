@@ -2,11 +2,11 @@ name: sad-ecommerce
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_MULTIPLE_DATABASES: product_db,cart_db,order_db,user_db,inventory_db
+      POSTGRES_MULTIPLE_DATABASES: product_db,cart_db,order_db,user_db,inventory_db,interaction_db,ai_db
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
@@ -106,6 +106,59 @@ services:
     ports:
       - "8005:8000"
 
+  interaction-service:
+    build: ./services/interaction-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: interaction_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      CORS_ALLOW_ALL_ORIGINS: "1"
+    depends_on:
+      - postgres
+    ports:
+      - "8006:8000"
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/neo4j-password
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+  ai-service:
+    build: ./services/ai-service
+    environment:
+      DJANGO_SECRET_KEY: dev-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ai_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      CORS_ALLOW_ALL_ORIGINS: "1"
+      INTERACTION_SERVICE_URL: http://interaction-service:8000
+      PRODUCT_SERVICE_URL: http://product-service:8000
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j-password
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_EMBED_MODEL: ${OPENAI_EMBED_MODEL:-text-embedding-3-small}
+    depends_on:
+      - postgres
+      - interaction-service
+      - product-service
+      - neo4j
+    ports:
+      - "8007:8000"
+
   frontend:
     build:
       context: ./frontend
@@ -116,10 +169,14 @@ services:
         VITE_ORDER_API_BASE: http://localhost:8003
         VITE_INVENTORY_API_BASE: http://localhost:8005
         VITE_USER_API_BASE: http://localhost:8004
+        VITE_INTERACTION_API_BASE: http://localhost:8006
+        VITE_AI_API_BASE: http://localhost:8007
     depends_on:
       - product-service
       - cart-service
       - order-service
+      - interaction-service
+      - ai-service
     ports:
       - "3000:80"
 

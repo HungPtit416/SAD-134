@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { addToCart, getStockByProducts, listProducts } from '../api'
+import { addToCart, getStockByProducts, listProducts, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import ProductImage from '../components/ProductImage'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
+
+const SCROLL_KEY = 'elecshop_products_scroll_y'
 
 export default function Products() {
   const userId = useUserId()
@@ -23,10 +25,15 @@ export default function Products() {
       setProducts(p)
       const ids = p.map((x) => x.id)
       if (ids.length) {
-        const stocks = await getStockByProducts(ids)
-        const map = {}
-        for (const s of stocks) map[s.product_id] = s
-        setStockMap(map)
+        try {
+          const stocks = await getStockByProducts(ids)
+          const map = {}
+          for (const s of stocks) map[s.product_id] = s
+          setStockMap(map)
+        } catch {
+          // Stock is optional for the product grid; keep showing products.
+          setStockMap({})
+        }
       } else {
         setStockMap({})
       }
@@ -39,7 +46,28 @@ export default function Products() {
 
   useEffect(() => {
     load()
+    trackEvent(userId, 'browse_products', { metadata: {} })
+  }, [userId])
+
+  useEffect(() => {
+    // Restore scroll position when coming back from detail pages.
+    const saved = Number(sessionStorage.getItem(SCROLL_KEY) || '0')
+    if (saved > 0) {
+      setTimeout(() => window.scrollTo(0, saved), 0)
+    }
+    return () => {
+      sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || 0))
+    }
   }, [])
+
+  useEffect(() => {
+    const s = q.trim()
+    if (!s) return
+    const t = setTimeout(() => {
+      trackEvent(userId, 'search', { query: s, metadata: { source: 'products_page' } })
+    }, 400)
+    return () => clearTimeout(t)
+  }, [q, userId])
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -102,7 +130,6 @@ export default function Products() {
                   <div className="productCardVertical">
                     <div className="productMedia">
                       <ProductImage name={p.name} sku={p.sku} size={220} />
-                      <div className="aiBadge">AI</div>
                     </div>
                     <div className="productInfo">
                       <Link to={`/products/${p.id}`} className="productName vertical">

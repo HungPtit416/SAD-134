@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { checkout, getCart, removeCartItem, setCartItemQuantity } from '../api'
+import { checkout, getCart, removeCartItem, setCartItemQuantity, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
@@ -41,9 +41,11 @@ export default function Cart() {
     try {
       if (next <= 0) {
         await removeCartItem(userId, item.id)
+        trackEvent(userId, 'remove_from_cart', { product_id: item.product_id, metadata: { item_id: item.id } })
         toast.push({ title: 'Removed', message: 'Item removed from cart.' })
       } else {
         await setCartItemQuantity(userId, item.id, next)
+        trackEvent(userId, 'update_cart_qty', { product_id: item.product_id, metadata: { item_id: item.id, quantity: next } })
         toast.push({ title: 'Updated', message: `Quantity updated to ${next}.` })
       }
       setCart(await getCart(userId))
