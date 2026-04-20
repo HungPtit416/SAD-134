@@ -51,3 +51,16 @@ class UserEmbedding(models.Model):
     embedding = VectorField(dimensions=64) if VectorField is not None else models.JSONField(default=list)
     updated_at = models.DateTimeField(auto_now=True)
 
+
+class GraphSyncState(models.Model):
+    """
+    Cursor for incremental sync of interaction-service events into Neo4j.
+    """
+
+    key = models.CharField(max_length=32, unique=True, default="default")
+    last_event_id = models.BigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Graph sync states"
+

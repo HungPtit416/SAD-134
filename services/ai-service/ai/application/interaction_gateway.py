@@ -59,3 +59,33 @@ def list_recent_events(limit: int = 5000) -> list[InteractionEvent]:
         )
     return out
 
+
+def list_events_since(since_id: int, limit: int = 500) -> list[InteractionEvent]:
+    """
+    Events with id > since_id, ordered by id ascending (for incremental graph sync).
+    """
+
+    url = f"{settings.INTERACTION_SERVICE_URL}/api/events/list/"
+    lim = max(1, min(5000, int(limit)))
+    resp = requests.get(
+        url,
+        params={"since_id": int(since_id), "limit": lim},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    out: list[InteractionEvent] = []
+    for row in (data or []):
+        out.append(
+            InteractionEvent(
+                id=int(row["id"]),
+                user_id=str(row["user_id"]),
+                event_type=str(row["event_type"]),
+                product_id=(int(row["product_id"]) if row.get("product_id") is not None else None),
+                query=(row.get("query") or None),
+                metadata=(row.get("metadata") or {}),
+                created_at=str(row.get("created_at") or ""),
+            )
+        )
+    return out
+

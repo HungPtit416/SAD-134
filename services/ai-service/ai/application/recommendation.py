@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.conf import settings
+
 from .interaction_gateway import list_events
 from .product_gateway import Product, get_product, list_products
-from .graph_gateway import recommend_from_graph
+from .graph_gateway import recommend_from_graph, user_product_edge_count
 from ..infrastructure.models import ProductEmbedding, UserEmbedding
 
 
@@ -15,43 +17,83 @@ class Recommendation:
     reason: str
 
 
-def recommend_products(user_id: str, limit: int = 10) -> list[Recommendation]:
-    """
-    MVP recommender:
-    - Prefer graph-based signal if Neo4j is enabled.
-    - Prefer behavior-embedding signal if trained embeddings exist.
-    - Otherwise use recent interactions (view/add_to_cart/purchase) to infer preferred categories.
-    """
+def _dedupe_recommendations(items: list[Recommendation], limit: int) -> list[Recommendation]:
+    seen: set[int] = set()
+    out: list[Recommendation] = []
+    for r in items:
+        if r.product_id in seen:
+            continue
+        seen.add(r.product_id)
+        out.append(r)
+        if len(out) >= limit:
+            break
+    return out
 
-    limit = max(1, min(50, int(limit)))
 
-    graph = recommend_from_graph(user_id, limit=limit)
-    if graph:
-        return [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
-
-    # Behavior embeddings (Phase 2 baseline)
+def _recommendations_from_embeddings(user_id: str, limit: int) -> list[Recommendation]:
     try:
         from pgvector.django import CosineDistance
     except Exception:  # noqa: BLE001
         CosineDistance = None  # type: ignore[assignment]
 
-    if CosineDistance is not None:
-        ue = UserEmbedding.objects.filter(user_id=user_id).first()
-        if ue is not None:
-            events = list_events(user_id, limit=200)
-            interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
-            qs = ProductEmbedding.objects.all().exclude(product_id__in=list(interacted)).order_by(CosineDistance("embedding", ue.embedding))[:limit]
-            rows = list(qs)
-            if rows:
-                return [
-                    Recommendation(product_id=int(r.product_id), score=float(1.0 / (1e-6 + i + 1)), reason="behavior-embedding")
-                    for i, r in enumerate(rows)
-                ]
+    if CosineDistance is None:
+        return []
+
+    ue = UserEmbedding.objects.filter(user_id=user_id).first()
+    if ue is None:
+        return []
+
+    events = list_events(user_id, limit=200)
+    interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
+    qs = (
+        ProductEmbedding.objects.all()
+        .exclude(product_id__in=list(interacted))
+        .order_by(CosineDistance("embedding", ue.embedding))[:limit]
+    )
+    rows = list(qs)
+    if not rows:
+        return []
+    return [
+        Recommendation(product_id=int(r.product_id), score=float(1.0 / (1e-6 + i + 1)), reason="behavior-embedding")
+        for i, r in enumerate(rows)
+    ]
+
+
+def recommend_products(user_id: str, limit: int = 10) -> list[Recommendation]:
+    """
+    When Neo4j + behavior embeddings both exist:
+    - Strong graph: at least one co-occurrence hit → prefer graph.
+    - Weak graph (only same-category expansion) → prefer embeddings first, then fill from graph.
+    When only one source exists, use it; else category heuristics from recent events.
+    """
+
+    limit = max(1, min(50, int(limit)))
+    min_edges = max(0, int(getattr(settings, "GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND", 2)))
+
+    graph = recommend_from_graph(user_id, limit=limit)
+    emb = _recommendations_from_embeddings(user_id, limit=limit)
+
+    if graph and emb:
+        has_cooc = any(g.reason == "graph-cooccurrence" for g in graph)
+        if has_cooc:
+            return [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
+
+        edges = user_product_edge_count(user_id)
+        if edges >= min_edges:
+            graph_recs = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
+            return _dedupe_recommendations(emb + graph_recs, limit)
+
+        return emb
+
+    if graph:
+        return [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
+
+    if emb:
+        return emb
 
     events = list_events(user_id, limit=200)
     interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
 
-    # Infer category preferences from recently interacted products.
     cat_scores: dict[int, float] = {}
     for e in events:
         if e.product_id is None:
@@ -110,4 +152,3 @@ def hydrate_products(recs: list[Recommendation]) -> list[dict]:
         )
     rows.sort(key=lambda r: r["rank"])
     return rows
-

@@ -34,6 +34,16 @@ def list_events(request):
         qs = qs.filter(event_type=event_type)
     limit = int(request.query_params.get("limit", "50"))
     limit = max(1, min(5000, limit))
+
+    since_id = request.query_params.get("since_id")
+    if since_id is not None and str(since_id).strip() != "":
+        try:
+            sid = int(since_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "since_id must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+        qs = qs.filter(id__gt=sid).order_by("id")[:limit]
+        return Response(EventSerializer(qs, many=True).data)
+
     qs = qs[:limit]
     return Response(EventSerializer(qs, many=True).data)
 

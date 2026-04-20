@@ -31,7 +31,6 @@ export default function Products() {
           for (const s of stocks) map[s.product_id] = s
           setStockMap(map)
         } catch {
-          // Stock is optional for the product grid; keep showing products.
           setStockMap({})
         }
       } else {
@@ -50,7 +49,6 @@ export default function Products() {
   }, [userId])
 
   useEffect(() => {
-    // Restore scroll position when coming back from detail pages.
     const saved = Number(sessionStorage.getItem(SCROLL_KEY) || '0')
     if (saved > 0) {
       setTimeout(() => window.scrollTo(0, saved), 0)
@@ -110,6 +108,9 @@ export default function Products() {
               className="searchInput"
             />
           </div>
+          <Link to="/recommended" className="btn btnPrimary">
+            Gợi ý cho bạn
+          </Link>
           <button className="btn" onClick={load} disabled={loading}>
             Refresh
           </button>
@@ -119,50 +120,47 @@ export default function Products() {
       {error ? <div className="alert">{error}</div> : null}
 
       <div className="gridCards">
-        {filtered.map((p) => (
-          <div key={p.id} className="card">
-            <div className="cardBody">
-              {(() => {
-                const s = stockMap[p.id]
-                const left = s?.quantity ?? null
-                const initial = s?.initial_quantity ?? null
-                return (
-                  <div className="productCardVertical">
-                    <div className="productMedia">
-                      <ProductImage name={p.name} sku={p.sku} size={220} />
-                    </div>
-                    <div className="productInfo">
-                      <Link to={`/products/${p.id}`} className="productName vertical">
-                        {p.name}
-                      </Link>
-                      <div className="priceBlock">
-                        <div className="priceNow">{money(p.price, 'VND')}</div>
-                      </div>
-
-                      {left != null && initial != null ? (
-                        <div className="stockBox">
-                          <div className="stockLabel">Còn {left} sản phẩm</div>
-                        </div>
-                      ) : (
-                        <div className="stockBox">
-                          <div className="stockLabel">Đang cập nhật tồn kho</div>
-                        </div>
-                      )}
-
-                      <button className="buyNow" onClick={() => onAdd(p.id)} disabled={loading || (left != null && left <= 0)}>
-                        Mua ngay
-                      </button>
-                    </div>
+        {filtered.map((p) => {
+          const s = stockMap[p.id]
+          const left = s?.quantity ?? null
+          const initial = s?.initial_quantity ?? null
+          return (
+            <div key={p.id} className="card">
+              <div className="cardBody">
+                <div className="productCardVertical">
+                  <div className="productMedia">
+                    <ProductImage name={p.name} sku={p.sku} size={220} />
                   </div>
-                )
-              })()}
+                  <div className="productInfo">
+                    <Link to={`/products/${p.id}`} className="productName vertical">
+                      {p.name}
+                    </Link>
+                    <div className="priceBlock">
+                      <div className="priceNow">{money(p.price, 'VND')}</div>
+                    </div>
+
+                    {left != null && initial != null ? (
+                      <div className="stockBox">
+                        <div className="stockLabel">Còn {left} sản phẩm</div>
+                      </div>
+                    ) : (
+                      <div className="stockBox">
+                        <div className="stockLabel">Đang cập nhật tồn kho</div>
+                      </div>
+                    )}
+
+                    <button className="buyNow" onClick={() => onAdd(p.id)} disabled={loading || (left != null && left <= 0)}>
+                      Mua ngay
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {!filtered.length && !loading ? <div className="empty">No products</div> : null}
       </div>
     </div>
   )
 }
-

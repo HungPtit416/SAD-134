@@ -6,6 +6,7 @@ import OrderDetail from './pages/OrderDetail'
 import Orders from './pages/Orders'
 import ProductDetail from './pages/ProductDetail'
 import Products from './pages/Products'
+import RecommendedForYou from './pages/RecommendedForYou'
 import Register from './pages/Register'
 import './App.css'
 
@@ -14,6 +15,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Products />} />
+        <Route path="/recommended" element={<RecommendedForYou />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/orders" element={<Orders />} />

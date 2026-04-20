@@ -30,6 +30,7 @@ export default function Layout() {
           </div>
           <nav className="nav">
             <TopLink to="/">Products</TopLink>
+            <TopLink to="/recommended">Gợi ý</TopLink>
             <TopLink to="/cart">Cart</TopLink>
             <TopLink to="/orders">Orders</TopLink>
             {auth?.email ? (

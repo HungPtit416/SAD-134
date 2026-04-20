@@ -109,7 +109,19 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 OPENAI_EMBED_MODEL = os.environ.get("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 
-# Embedding provider: "openai" or "local"
+# Gemini (optional; used when OpenAI is not configured or provider selects it)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+GEMINI_EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+
+# Providers:
+# - EMBEDDING_PROVIDER: "openai" | "gemini" | "local"
+# - CHAT_PROVIDER: "openai" | "gemini"
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "openai")
+CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "openai")
+
+# Recommender: when both graph + behavior embeddings exist, prefer co-occurrence graph if true;
+# if graph only has same-category signal, blend with embeddings when user has at least this many product edges.
+GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND = int(os.environ.get("GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND", "2"))
 
 

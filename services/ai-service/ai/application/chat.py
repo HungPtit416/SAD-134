@@ -8,7 +8,7 @@ from .product_gateway import Product, get_product, list_products
 from .indexing import retrieve_similar
 from .openai_client import chat_completion
 from .recommendation import hydrate_products, recommend_products
-from .graph_gateway import upsert_event_to_graph
+from .graph_gateway import graph_context_for_rag, upsert_event_to_graph
 
 
 @dataclass(frozen=True)
@@ -255,6 +255,9 @@ def _answer_availability_vi(message: str, products: list[Product]) -> str | None
     # Do not treat generic "phụ kiện ..." as stock lookup — that is accessory advice.
     if any(k in s for k in ["phụ kiện", "phu kien"]):
         return None
+    # Do not treat recommendation-style questions as stock lookup.
+    if any(k in s for k in ["gợi ý", "tư vấn", "phù hợp", "đáng mua"]):
+        return None
 
     m = re.search(r"\bshop\s+có\s+(.+?)(?:\s+không|\?|$)", s, flags=re.I)
     if not m:
@@ -263,6 +266,9 @@ def _answer_availability_vi(message: str, products: list[Product]) -> str | None
         return None
 
     q = m.group(1).strip()
+    # Avoid generic queries like "mẫu nào phù hợp" / "sản phẩm nào" which are not SKU/name checks.
+    if any(k in q for k in ["mẫu nào", "san pham nao", "sản phẩm nào", "loại nào", "nào phù hợp", "phù hợp"]):
+        return None
     tokens = _tokenize_product_query(q)
     if not tokens:
         return None
@@ -324,9 +330,12 @@ def _should_use_heuristic_first(message: str) -> bool:
     want_accessories = any(k in s for k in ["phụ kiện", "accessory", "phu kien"]) or want_charger or want_cable or want_case
 
     want_laptop = "laptop" in s or "macbook" in s
+    want_audio = any(k in s for k in ["tai nghe", "earbud", "airpods", "headphone", "chống ồn", "noise cancelling", "anc"])
     want_similar = any(k in s for k in ["tương tự", "similar", "giống"])
 
     if want_accessories:
+        return True
+    if want_audio:
         return True
     if want_laptop and _prefer_non_gaming_laptop(s):
         return True
@@ -507,8 +516,80 @@ def answer_chat(user_id: str, message: str) -> ChatResult:
     recs = recommend_products(user_id, limit=5)
     products = hydrate_products(recs)
 
+    def _price_vnd(p: Product) -> int | None:
+        try:
+            return int(float(p.price)) if p.price is not None else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _cat(p: Product) -> str:
+        return (p.category_name or "").lower()
+
+    def _augment_candidates(msg: str, base: list[dict]) -> list[dict]:
+        """
+        Ensure the context always contains category-relevant candidates when the user asks explicitly
+        (e.g., laptop/audio), even if personalized recommenders return unrelated items.
+        """
+
+        s = (msg or "").lower()
+        want_laptop = "laptop" in s or "macbook" in s
+        want_audio = any(k in s for k in ["tai nghe", "earbud", "airpods", "headphone", "chống ồn", "noise cancelling", "anc"])
+
+        if not (want_laptop or want_audio):
+            return base
+
+        budget_min, budget_max = _parse_budget_vnd(msg)
+        try:
+            allp = list_products()
+        except Exception:  # noqa: BLE001
+            allp = []
+
+        cand: list[Product] = allp
+        if want_laptop:
+            cand = [p for p in cand if "laptop" in _cat(p) or "macbook" in _name_key(p)]
+            if _prefer_non_gaming_laptop(s):
+                cand = [p for p in cand if not _is_gaming_laptop_name(p.name)]
+        elif want_audio:
+            cand = [p for p in cand if "audio" in _cat(p)]
+
+        if budget_min is not None or budget_max is not None:
+            tmp: list[Product] = []
+            for p in cand:
+                pv = _price_vnd(p)
+                if pv is None:
+                    continue
+                if budget_min is not None and pv < budget_min:
+                    continue
+                if budget_max is not None and pv > budget_max:
+                    continue
+                tmp.append(p)
+            cand = tmp
+
+        # Add up to 3 items not already in base.
+        have = {int(x.get("id")) for x in base if x.get("id") is not None}
+        extra: list[dict] = []
+        for p in cand[:6]:
+            if int(p.id) in have:
+                continue
+            extra.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "sku": p.sku,
+                    "category": p.category_name,
+                    "price": p.price,
+                    "currency": p.currency,
+                    "description": (p.description or "")[:240],
+                }
+            )
+            have.add(int(p.id))
+            if len(extra) >= 3:
+                break
+
+        return base + extra
+
     # Build short textual context using product descriptions
-    picked = []
+    picked: list[dict] = []
     for p in products[:3]:
         try:
             full = get_product(int(p["id"]))
@@ -525,6 +606,7 @@ def answer_chat(user_id: str, message: str) -> ChatResult:
             )
         except Exception:  # noqa: BLE001
             picked.append(p)
+    picked = _augment_candidates(msg, picked)
 
     retrieved = []
     try:
@@ -542,24 +624,58 @@ def answer_chat(user_id: str, message: str) -> ChatResult:
     except Exception:  # noqa: BLE001
         retrieved = []
 
+    graph_ctx_raw: dict = {}
+    graph_ctx_display: dict = {"enabled": False}
+    try:
+        graph_ctx_raw = graph_context_for_rag(user_id, limit=8)
+        if graph_ctx_raw.get("enabled"):
+            graph_products: list[dict] = []
+            _g_ids = graph_ctx_raw.get("cooccurrence_product_ids") or []
+            _g_scores = graph_ctx_raw.get("cooccurrence_scores") or []
+            for i, pid in enumerate(_g_ids):
+                sc = _g_scores[i] if i < len(_g_scores) else None
+                try:
+                    p = get_product(int(pid))
+                    graph_products.append(
+                        {
+                            "product_id": p.id,
+                            "name": p.name,
+                            "category": p.category_name,
+                            "price": p.price,
+                            "graph_score": float(sc) if sc is not None else None,
+                        }
+                    )
+                except Exception:  # noqa: BLE001
+                    graph_products.append({"product_id": int(pid), "graph_score": float(sc) if sc is not None else None})
+            graph_ctx_display = {
+                "enabled": True,
+                "searched_queries": graph_ctx_raw.get("searched_queries") or [],
+                "cooccurrence_candidates": graph_products,
+                "user_category_names": graph_ctx_raw.get("user_category_names") or [],
+            }
+    except Exception:  # noqa: BLE001
+        graph_ctx_display = {"enabled": False}
+
     ctx = {
         "user_id": user_id,
         "message": msg,
         "history": history,
         "recommended_products": picked,
         "retrieved_chunks": retrieved,
+        "graph_context": graph_ctx_display,
     }
 
     system = (
         "Bạn là trợ lý tư vấn mua sắm của ElecShop (sàn thương mại điện tử). "
         "Luôn trả lời bằng tiếng Việt. "
-        "Chỉ sử dụng thông tin trong phần ngữ cảnh được cung cấp (hành vi người dùng, các chunks đã truy xuất, danh sách sản phẩm gợi ý). "
+        "Chỉ sử dụng thông tin trong phần ngữ cảnh được cung cấp (hành vi người dùng, đồ thị gợi ý, các chunks đã truy xuất, danh sách sản phẩm gợi ý). "
         "Nếu ngữ cảnh chưa đủ để trả lời chắc chắn, hãy hỏi 1-2 câu hỏi làm rõ. "
         "Khi nhắc đến một sản phẩm, hãy kèm product_id."
     )
     user = (
         f"User message:\n{msg}\n\n"
         f"User behavior context:\n{history}\n\n"
+        f"Graph-aware signals (Neo4j):\n{graph_ctx_display}\n\n"
         f"Retrieved knowledge chunks:\n{retrieved}\n\n"
         f"Candidate recommended products:\n{picked}\n"
     )
