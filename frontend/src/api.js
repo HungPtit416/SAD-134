@@ -125,7 +125,14 @@ export async function aiChat(userId, message) {
   })
 }
 
-export async function aiRecommendations(userId, limit = 10) {
-  return await httpJson(`${AI_API}/api/recommendations/?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}`)
+export async function aiRecommendations(userId, limit = 10, query = null, seedProductIds = null) {
+  const q = query != null && String(query).trim() ? `&query=${encodeURIComponent(String(query).trim())}` : ''
+  const seeds =
+    Array.isArray(seedProductIds) && seedProductIds.length
+      ? `&seed_product_ids=${encodeURIComponent(seedProductIds.join(','))}`
+      : ''
+  return await httpJson(
+    `${AI_API}/api/recommendations/?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}${q}${seeds}`,
+  )
 }
 

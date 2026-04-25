@@ -1,0 +1,10 @@
+{
+  "view": 0,
+  "click": 1,
+  "add_to_cart": 2,
+  "purchase": 3,
+  "search": 4,
+  "browse_products": 5,
+  "browse_recommended": 6,
+  "checkout": 7
+}

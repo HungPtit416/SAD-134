@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { checkout, getCart, removeCartItem, setCartItemQuantity, trackEvent } from '../api'
+import { aiRecommendations, checkout, getCart, removeCartItem, setCartItemQuantity, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
+import ProductImage from '../components/ProductImage'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
 
@@ -12,6 +13,7 @@ export default function Cart() {
   const [cart, setCart] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [recs, setRecs] = useState([])
 
   async function load() {
     setLoading(true)
@@ -28,6 +30,24 @@ export default function Cart() {
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    let alive = true
+    async function loadRecs() {
+      try {
+        const seedIds = (cart?.items || []).map((it) => it.product_id).filter((x) => x != null)
+        const res = await aiRecommendations(userId, 6, null, seedIds)
+        const items = Array.isArray(res?.items) ? res.items : []
+        if (alive) setRecs(items)
+      } catch {
+        if (alive) setRecs([])
+      }
+    }
+    loadRecs()
+    return () => {
+      alive = false
+    }
+  }, [userId, cart?.items?.length])
 
   const items = cart?.items || []
   const total = useMemo(() => {
@@ -131,6 +151,33 @@ export default function Cart() {
           <button className="btnPrimary" onClick={onCheckout} disabled={loading || !items.length}>
             Checkout
           </button>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 14 }}>
+        <div className="panelHeader">
+          <div className="panelTitle">Gợi ý thêm cho bạn</div>
+          <Link to="/recommended" className="link">
+            Xem đầy đủ
+          </Link>
+        </div>
+        <div className="panelBody">
+          {!recs.length ? <div className="empty">Chưa có gợi ý. Hãy xem sản phẩm hoặc thêm vào giỏ hàng để tăng tín hiệu.</div> : null}
+          {recs.length ? (
+            <div className="miniRecGrid">
+              {recs.slice(0, 6).map((p) => (
+                <Link key={p.id} to={`/products/${p.id}`} className="miniRecCard">
+                  <div className="miniRecImg">
+                    <ProductImage name={p.name} sku={p.sku} size={96} />
+                  </div>
+                  <div className="miniRecInfo">
+                    <div className="miniRecName">{p.name}</div>
+                    <div className="miniRecPrice">{money(p.price, 'VND')}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

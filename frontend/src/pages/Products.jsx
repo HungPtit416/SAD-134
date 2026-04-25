@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { addToCart, getStockByProducts, listProducts, trackEvent } from '../api'
+import { addToCart, aiRecommendations, getStockByProducts, listProducts, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import ProductImage from '../components/ProductImage'
 import { useToast } from '../components/Toast'
@@ -14,6 +14,7 @@ export default function Products() {
   const [products, setProducts] = useState([])
   const [stockMap, setStockMap] = useState({})
   const [q, setQ] = useState('')
+  const [recs, setRecs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -67,6 +68,28 @@ export default function Products() {
     return () => clearTimeout(t)
   }, [q, userId])
 
+  useEffect(() => {
+    const s = q.trim()
+    if (!s) {
+      setRecs([])
+      return
+    }
+    let alive = true
+    const t = setTimeout(async () => {
+      try {
+        const res = await aiRecommendations(userId, 6, s)
+        const list = Array.isArray(res?.items) ? res.items : []
+        if (alive) setRecs(list)
+      } catch {
+        if (alive) setRecs([])
+      }
+    }, 500)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [q, userId])
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     if (!s) return products
@@ -118,6 +141,35 @@ export default function Products() {
       </div>
 
       {error ? <div className="alert">{error}</div> : null}
+
+      {q.trim() ? (
+        <div className="panel" style={{ marginBottom: 14 }}>
+          <div className="panelHeader">
+            <div className="panelTitle">Gợi ý theo tìm kiếm</div>
+            <Link to="/recommended" className="link">
+              Mở trang gợi ý
+            </Link>
+          </div>
+          <div className="panelBody">
+            {!recs.length ? <div className="empty">Đang tìm gợi ý…</div> : null}
+            {recs.length ? (
+              <div className="miniRecGrid">
+                {recs.slice(0, 6).map((p) => (
+                  <Link key={p.id} to={`/products/${p.id}`} className="miniRecCard">
+                    <div className="miniRecImg">
+                      <ProductImage name={p.name} sku={p.sku} size={96} />
+                    </div>
+                    <div className="miniRecInfo">
+                      <div className="miniRecName">{p.name}</div>
+                      <div className="miniRecPrice">{money(p.price, 'VND')}</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="gridCards">
         {filtered.map((p) => {

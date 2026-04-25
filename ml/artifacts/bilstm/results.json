@@ -1,0 +1,25 @@
+{
+  "task": "next_action_prediction",
+  "model_kind": "bilstm",
+  "label_space": [
+    "view",
+    "click",
+    "add_to_cart",
+    "purchase",
+    "search",
+    "browse_products",
+    "browse_recommended",
+    "checkout"
+  ],
+  "seq_len": 6,
+  "embed_dim": 32,
+  "rnn_units": 128,
+  "epochs": 20,
+  "batch_size": 256,
+  "seed": 42,
+  "metrics": {
+    "accuracy": 0.43889427740058196,
+    "macro_f1": 0.3803313777814038
+  },
+  "selection_note": "Use macro_f1 when comparing models because class distribution is imbalanced."
+}

@@ -1,0 +1,32 @@
+{
+  "task": "next_action_prediction",
+  "label_space": [
+    "view",
+    "click",
+    "add_to_cart",
+    "purchase",
+    "search",
+    "browse_products",
+    "browse_recommended",
+    "checkout"
+  ],
+  "seq_len": 6,
+  "embed_dim": 16,
+  "rnn_units": 64,
+  "metrics": {
+    "rnn": {
+      "accuracy": 0.4266666666666667,
+      "macro_f1": 0.24809439420840118
+    },
+    "lstm": {
+      "accuracy": 0.36533333333333334,
+      "macro_f1": 0.1253844613601972
+    },
+    "bilstm": {
+      "accuracy": 0.4010666666666667,
+      "macro_f1": 0.20238897089542565
+    }
+  },
+  "model_best": "rnn",
+  "selection_criterion": "macro_f1"
+}

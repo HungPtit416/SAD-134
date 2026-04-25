@@ -9,6 +9,7 @@ from .indexing import retrieve_similar
 from .openai_client import chat_completion
 from .recommendation import hydrate_products, recommend_products
 from .graph_gateway import graph_context_for_rag, upsert_event_to_graph
+from .sequence_predictor import predict_next_action
 
 
 @dataclass(frozen=True)
@@ -515,6 +516,7 @@ def answer_chat(user_id: str, message: str) -> ChatResult:
     history = _summarize_history(user_id)
     recs = recommend_products(user_id, limit=5)
     products = hydrate_products(recs)
+    next_action = predict_next_action(user_id, seq_len=6)
 
     def _price_vnd(p: Product) -> int | None:
         try:
@@ -660,6 +662,13 @@ def answer_chat(user_id: str, message: str) -> ChatResult:
         "user_id": user_id,
         "message": msg,
         "history": history,
+        "predicted_next_action": {
+            "enabled": next_action.enabled,
+            "action": next_action.action,
+            "confidence": next_action.confidence,
+            "top_probs": next_action.probs,
+            "note": next_action.note,
+        },
         "recommended_products": picked,
         "retrieved_chunks": retrieved,
         "graph_context": graph_ctx_display,
@@ -675,6 +684,7 @@ def answer_chat(user_id: str, message: str) -> ChatResult:
     user = (
         f"User message:\n{msg}\n\n"
         f"User behavior context:\n{history}\n\n"
+        f"Predicted next action (LSTM):\n{ctx['predicted_next_action']}\n\n"
         f"Graph-aware signals (Neo4j):\n{graph_ctx_display}\n\n"
         f"Retrieved knowledge chunks:\n{retrieved}\n\n"
         f"Candidate recommended products:\n{picked}\n"

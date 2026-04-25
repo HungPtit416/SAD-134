@@ -33,7 +33,8 @@ class Command(BaseCommand):
         for e in sorted(events, key=lambda x: x.created_at):
             if e.product_id is None:
                 continue
-            if e.event_type not in {"view", "add_to_cart", "purchase"}:
+            # Include click as a product interaction signal (required in the assignment behaviors).
+            if e.event_type not in {"view", "click", "add_to_cart", "purchase"}:
                 continue
             by_user[e.user_id].append(int(e.product_id))
 

@@ -121,6 +121,8 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
       CORS_ALLOW_ALL_ORIGINS: "1"
+    volumes:
+      - ./data:/app/data:ro
     depends_on:
       - postgres
     ports:
@@ -159,6 +161,11 @@ services:
       GEMINI_EMBED_MODEL: ${GEMINI_EMBED_MODEL:-gemini-embedding-001}
       CHAT_PROVIDER: ${CHAT_PROVIDER:-gemini}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+      SEQ_MODEL_PATH: /app/seq_model/model_best_lstm.keras
+    volumes:
+      - ./data:/app/data:ro
+      - ./ml/artifacts/lstm:/app/seq_model:ro
+      - ./reports:/app/reports
     depends_on:
       - postgres
       - interaction-service
@@ -195,6 +202,10 @@ services:
       CHAT_PROVIDER: ${CHAT_PROVIDER:-gemini}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
       AI_CRON_INTERVAL_SECONDS: ${AI_CRON_INTERVAL_SECONDS:-3600}
+      SEQ_MODEL_PATH: /app/seq_model/model_best_lstm.keras
+    volumes:
+      - ./ml/artifacts/lstm:/app/seq_model:ro
+      - ./reports:/app/reports
     depends_on:
       - postgres
       - interaction-service

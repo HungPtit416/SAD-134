@@ -124,4 +124,7 @@ CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "openai")
 # if graph only has same-category signal, blend with embeddings when user has at least this many product edges.
 GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND = int(os.environ.get("GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND", "2"))
 
+# Optional: sequence model (LSTM) for next-action prediction
+SEQ_MODEL_PATH = os.environ.get("SEQ_MODEL_PATH", "")
+
 

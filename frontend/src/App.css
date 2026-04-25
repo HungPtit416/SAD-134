@@ -225,6 +225,52 @@
   cursor: not-allowed;
 }
 
+.miniRecGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .miniRecGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.miniRecCard {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  text-decoration: none;
+  color: inherit;
+  background: white;
+}
+.miniRecCard:hover {
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+}
+.miniRecImg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.miniRecInfo {
+  display: grid;
+  gap: 4px;
+}
+.miniRecName {
+  font-weight: 900;
+  line-height: 1.2;
+  font-size: 13px;
+}
+.miniRecPrice {
+  font-weight: 1000;
+  color: #111827;
+  font-size: 13px;
+}
+
 .btn,
 .btnPrimary {
   border: 1px solid rgba(17, 24, 39, 0.14);

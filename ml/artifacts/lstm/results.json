@@ -1,0 +1,25 @@
+{
+  "task": "next_action_prediction",
+  "model_kind": "lstm",
+  "label_space": [
+    "view",
+    "click",
+    "add_to_cart",
+    "purchase",
+    "search",
+    "browse_products",
+    "browse_recommended",
+    "checkout"
+  ],
+  "seq_len": 6,
+  "embed_dim": 32,
+  "rnn_units": 128,
+  "epochs": 20,
+  "batch_size": 256,
+  "seed": 42,
+  "metrics": {
+    "accuracy": 0.5181862269641125,
+    "macro_f1": 0.4247764013239887
+  },
+  "selection_note": "Use macro_f1 when comparing models because class distribution is imbalanced."
+}

@@ -8,4 +8,5 @@ pgvector>=0.3
 openai>=1.0
 google-genai>=1.0
 gunicorn>=22.0
+tensorflow-cpu>=2.16
 
