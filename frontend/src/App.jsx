@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import StaffLayout from './components/StaffLayout'
 import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import Login from './pages/Login'
@@ -10,6 +11,8 @@ import ProductDetail from './pages/ProductDetail'
 import Products from './pages/Products'
 import RecommendedForYou from './pages/RecommendedForYou'
 import Register from './pages/Register'
+import StaffLogin from './pages/StaffLogin'
+import StaffProducts from './pages/StaffProducts'
 import './App.css'
 
 export default function App() {
@@ -27,6 +30,12 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+
+      <Route path="/staff" element={<StaffLayout />}>
+        <Route path="login" element={<StaffLogin />} />
+        <Route path="products" element={<StaffProducts />} />
+        <Route index element={<Navigate to="/staff/products" replace />} />
       </Route>
     </Routes>
   )

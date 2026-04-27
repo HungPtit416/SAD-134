@@ -3,6 +3,8 @@ from rest_framework import serializers, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from ..infrastructure.models import Customer, Role
+
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -22,5 +24,11 @@ def register(request):
         return Response({"detail": "Email already registered"}, status=status.HTTP_409_CONFLICT)
 
     user = User.objects.create_user(username=email, email=email, password=password, first_name=full_name)
+    # Create business-profile record for downstream services
+    role, _ = Role.objects.get_or_create(name="customer", defaults={"description": "Default customer role"})
+    Customer.objects.get_or_create(
+        user_id=email,
+        defaults={"email": email, "full_name": full_name, "role": role},
+    )
     return Response({"id": user.id, "email": user.email}, status=status.HTTP_201_CREATED)
 

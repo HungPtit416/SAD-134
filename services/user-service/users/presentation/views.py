@@ -37,5 +37,9 @@ def verify_jwt(request):
     resp = Response({"ok": True, "user": username}, status=status.HTTP_200_OK)
     if username:
         resp["X-User-Id"] = str(username)
+    # Role hints for the API Gateway to forward downstream.
+    # We reuse Django's built-in flags (no custom user model needed).
+    is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+    resp["X-User-Role"] = "staff" if is_staff else "customer"
     return resp
 

@@ -3,6 +3,9 @@ const CART_API = import.meta.env.VITE_CART_API_BASE || 'http://localhost:8002'
 const ORDER_API = import.meta.env.VITE_ORDER_API_BASE || 'http://localhost:8003'
 const INTERACTION_API = import.meta.env.VITE_INTERACTION_API_BASE || 'http://localhost:8006'
 const AI_API = import.meta.env.VITE_AI_API_BASE || 'http://localhost:8007'
+const USER_API = import.meta.env.VITE_USER_API_BASE || 'http://localhost:8004'
+
+const STAFF_AUTH_KEY = 'sad_staff_auth_v1'
 
 function getSessionId() {
   try {
@@ -74,6 +77,15 @@ function _friendlyHttpMessage(status, detail) {
 }
 
 async function httpJson(url, options) {
+  const authKind = options?.__authKind || 'customer'
+  if (options && typeof options === 'object' && '__authKind' in options) {
+    try {
+      // Remove non-fetch init key
+      delete options.__authKind
+    } catch {
+      // ignore
+    }
+  }
   let resp
   try {
     resp = await fetch(url, options)
@@ -102,17 +114,32 @@ async function httpJson(url, options) {
     err.detail = detail
     err.url = url
     if (resp.status === 401) {
-      try {
-        localStorage.removeItem('sad_auth_v1')
-      } catch {
-        // ignore
-      }
-      try {
-        if (typeof window !== 'undefined' && window.location && window.location.pathname !== '/login') {
-          window.location.href = '/login'
+      if (authKind === 'staff') {
+        try {
+          localStorage.removeItem(STAFF_AUTH_KEY)
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+        try {
+          if (typeof window !== 'undefined' && window.location && !window.location.pathname.startsWith('/staff/login')) {
+            window.location.href = '/staff/login'
+          }
+        } catch {
+          // ignore
+        }
+      } else {
+        try {
+          localStorage.removeItem('sad_auth_v1')
+        } catch {
+          // ignore
+        }
+        try {
+          if (typeof window !== 'undefined' && window.location && window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
+        } catch {
+          // ignore
+        }
       }
     }
     throw err
@@ -149,6 +176,24 @@ function authHeaders(extra) {
   return h
 }
 
+function getStaffAccessToken() {
+  try {
+    const raw = localStorage.getItem(STAFF_AUTH_KEY)
+    if (!raw) return null
+    const obj = JSON.parse(raw)
+    return obj?.token?.access || null
+  } catch {
+    return null
+  }
+}
+
+function staffAuthHeaders(extra) {
+  const access = getStaffAccessToken()
+  const h = { ...(extra || {}) }
+  if (access) h.Authorization = `Bearer ${access}`
+  return h
+}
+
 export async function trackEvent(userId, eventType, payload) {
   if (!userId) return
   const body = {
@@ -177,6 +222,91 @@ export async function listProducts() {
 
 export async function getProduct(productId) {
   return await httpJson(`${PRODUCT_API}/api/products/${productId}/`)
+}
+
+export async function listCategories() {
+  const data = await httpJson(`${PRODUCT_API}/api/categories/`)
+  return Array.isArray(data) ? data : data?.results || []
+}
+
+export async function staffLogin(email, password) {
+  const token = await httpJson(
+    `${USER_API}/api/auth/staff/login/`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: email, password }),
+      __authKind: 'staff',
+    },
+  )
+  try {
+    localStorage.setItem(STAFF_AUTH_KEY, JSON.stringify({ email, token }))
+  } catch {
+    // ignore
+  }
+  return token
+}
+
+export function staffLogout() {
+  try {
+    localStorage.removeItem(STAFF_AUTH_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+export function getStaffEmail() {
+  try {
+    const raw = localStorage.getItem(STAFF_AUTH_KEY)
+    if (!raw) return null
+    const obj = JSON.parse(raw)
+    return obj?.email || null
+  } catch {
+    return null
+  }
+}
+
+export async function staffCreateProduct(payload) {
+  return await httpJson(`${PRODUCT_API}/api/products/`, {
+    method: 'POST',
+    headers: staffAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+    __authKind: 'staff',
+  })
+}
+
+export async function staffUpdateProduct(productId, patch) {
+  return await httpJson(`${PRODUCT_API}/api/products/${productId}/`, {
+    method: 'PATCH',
+    headers: staffAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(patch),
+    __authKind: 'staff',
+  })
+}
+
+export async function staffDeleteProduct(productId) {
+  const resp = await fetch(`${PRODUCT_API}/api/products/${productId}/`, {
+    method: 'DELETE',
+    headers: staffAuthHeaders(),
+  })
+  if (!resp.ok && resp.status !== 204) {
+    const txt = await resp.text().catch(() => '')
+    const detail = _looksLikeHtml(txt) ? null : _extractDetailFromJsonText(txt) || String(txt || '').trim().slice(0, 300) || null
+    const msg = _friendlyHttpMessage(resp.status, detail)
+    const err = new Error(msg)
+    err.status = resp.status
+    err.statusText = resp.statusText
+    err.detail = detail
+    err.url = `${PRODUCT_API}/api/products/${productId}/`
+    if (resp.status === 401) {
+      try {
+        localStorage.removeItem(STAFF_AUTH_KEY)
+      } catch {
+        // ignore
+      }
+    }
+    throw err
+  }
 }
 
 export async function getCart(userId) {

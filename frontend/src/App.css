@@ -39,6 +39,55 @@
   top: 0;
   z-index: 10;
 }
+
+/* Staff portal look & feel (distinct from shop UI) */
+.staffShell {
+  min-height: 100vh;
+  background: radial-gradient(circle at 15% 10%, rgba(220, 38, 38, 0.10), transparent 40%),
+    radial-gradient(circle at 80% 20%, rgba(37, 99, 235, 0.10), transparent 45%),
+    rgba(17, 24, 39, 0.02);
+}
+.staffHeader {
+  background: linear-gradient(180deg, #111827, #0b1220);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.staffHeader .brandName {
+  color: white;
+}
+.staffNavLink {
+  padding: 10px 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid transparent;
+  font-weight: 800;
+}
+.staffNavLink:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.staffNavLinkActive {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(220, 38, 38, 0.18);
+}
+.staffBadge {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 900;
+}
+.staffHint {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.68);
+}
 .headerInner {
   height: 64px;
   display: flex;

@@ -33,6 +33,7 @@ export default function Layout() {
             <TopLink to="/recommended">Gợi ý</TopLink>
             <TopLink to="/cart">Cart</TopLink>
             <TopLink to="/orders">Orders</TopLink>
+            <TopLink to="/staff/products">Staff</TopLink>
             {auth?.email ? (
               <button className="btn" onClick={logout} type="button">
                 Logout
