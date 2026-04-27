@@ -122,9 +122,15 @@ CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "openai")
 
 # Recommender: when both graph + behavior embeddings exist, prefer co-occurrence graph if true;
 # if graph only has same-category signal, blend with embeddings when user has at least this many product edges.
-GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND = int(os.environ.get("GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND", "2"))
+GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND = int(os.environ.get("GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND", "1"))
 
 # Optional: sequence model (LSTM) for next-action prediction
 SEQ_MODEL_PATH = os.environ.get("SEQ_MODEL_PATH", "")
+
+# Phase-4: GraphRAG + GNN knobs (keep defaults small for report reproducibility)
+GRAPHRAG_EVIDENCE_LIMIT = int(os.environ.get("GRAPHRAG_EVIDENCE_LIMIT", "20"))
+LIGHTGCN_DIM = int(os.environ.get("LIGHTGCN_DIM", "64"))
+LIGHTGCN_LAYERS = int(os.environ.get("LIGHTGCN_LAYERS", "2"))
+LIGHTGCN_EPOCHS = int(os.environ.get("LIGHTGCN_EPOCHS", "5"))
 
 

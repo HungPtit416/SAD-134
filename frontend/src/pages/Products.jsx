@@ -162,6 +162,7 @@ export default function Products() {
                     <div className="miniRecInfo">
                       <div className="miniRecName">{p.name}</div>
                       <div className="miniRecPrice">{money(p.price, 'VND')}</div>
+                      {p?.category?.name ? <div className="mutedSmall">{p.category.name}</div> : null}
                     </div>
                   </Link>
                 ))}
@@ -190,6 +191,7 @@ export default function Products() {
                     <div className="priceBlock">
                       <div className="priceNow">{money(p.price, 'VND')}</div>
                     </div>
+                    {p?.category?.name ? <div className="mutedSmall">{p.category.name}</div> : null}
 
                     {left != null && initial != null ? (
                       <div className="stockBox">

@@ -45,6 +45,28 @@ def seed() -> None:
         ("CABLE-USB-C", "USB-C Fast Charging Cable", "Durable 1m cable.", "99000", "VND", "accessories"),
         ("CASE-IP15", "iPhone 15 Case", "Protective case.", "199000", "VND", "accessories"),
         ("CHARGER-33W", "33W Fast Charger", "Fast wall charger.", "249000", "VND", "accessories"),
+        # --- Extra catalog for richer demos ---
+        ("SS-A55-256", "Samsung Galaxy A55 5G 256GB", "Mid-range Samsung phone with strong battery.", "9990000", "VND", "smartphone"),
+        ("SS-S23U-256", "Samsung Galaxy S23 Ultra 256GB", "Flagship phone with great zoom camera.", "23990000", "VND", "smartphone"),
+        ("PIXEL-8-128", "Google Pixel 8 128GB", "Camera-focused Android phone.", "13990000", "VND", "smartphone"),
+        ("ONEPLUS-12-256", "OnePlus 12 256GB", "Fast performance and smooth display.", "17990000", "VND", "smartphone"),
+        ("REALME-12P-256", "realme 12 Pro+ 256GB", "Affordable phone with periscope-like zoom.", "8990000", "VND", "smartphone"),
+        ("LENOVO-LOQ-15", "Lenovo LOQ 15", "Gaming laptop with RTX graphics.", "22990000", "VND", "laptop"),
+        ("DELL-G15-5530", "Dell G15 5530", "Gaming laptop with strong cooling.", "24990000", "VND", "laptop"),
+        ("ACER-NITRO-V", "Acer Nitro V", "Budget gaming laptop.", "19990000", "VND", "laptop"),
+        ("ASUS-ZEPHYRUS-G14", "ASUS ROG Zephyrus G14", "Compact high-end gaming laptop.", "35990000", "VND", "laptop"),
+        ("LG-GRAM-14", "LG Gram 14", "Ultra-light laptop for office.", "26990000", "VND", "laptop"),
+        ("IPAD-AIR-M2", "iPad Air M2", "Light tablet for study and creativity.", "16990000", "VND", "tablet"),
+        ("GAL-TAB-S9FE", "Galaxy Tab S9 FE", "Android tablet with stylus support.", "10990000", "VND", "tablet"),
+        ("XIAOMI-PAD-6", "Xiaomi Pad 6", "Tablet with high refresh display.", "7990000", "VND", "tablet"),
+        ("WATCH-ULTRA2", "Apple Watch Ultra 2", "Rugged smartwatch for sports.", "19990000", "VND", "smartwatch"),
+        ("GARMIN-FR265", "Garmin Forerunner 265", "Running smartwatch with GPS.", "10990000", "VND", "smartwatch"),
+        ("SPEAKER-SOUNDLINK", "Bose SoundLink Flex", "Portable speaker with deep bass.", "3490000", "VND", "audio"),
+        ("SENN-MOMENTUM-4", "Sennheiser Momentum 4", "Wireless headphones with long battery.", "8990000", "VND", "audio"),
+        ("ANKER-20K", "Anker PowerCore 20000mAh", "Power bank for travel.", "899000", "VND", "accessories"),
+        ("HUB-USB-C-7IN1", "USB-C Hub 7-in-1", "HDMI + USB + SD adapter.", "499000", "VND", "accessories"),
+        ("MOUSE-LOGI-MX3S", "Logitech MX Master 3S", "Ergonomic wireless mouse.", "2490000", "VND", "accessories"),
+        ("KB-LOGI-K380", "Logitech K380", "Compact multi-device keyboard.", "790000", "VND", "accessories"),
     ]
 
     for sku, name, description, price, currency, cat_slug in products:

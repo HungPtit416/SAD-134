@@ -1,0 +1,606 @@
+{
+  "user_id": "user-0001",
+  "message": "Mình cần gợi ý laptop dưới 15 triệu cho học lập trình.",
+  "enabled": true,
+  "seed": {
+    "user_id": "user-0001",
+    "query_texts": [
+      "Mình cần gợi ý laptop dưới 15 triệu cho học lập trình."
+    ],
+    "recent_product_ids": [
+      36,
+      17,
+      32,
+      60,
+      23,
+      15,
+      41,
+      46
+    ]
+  },
+  "stats": {
+    "searched_queries": 3,
+    "co_user_recs": 30,
+    "user_categories": 6,
+    "evidence_count": 20,
+    "evidence_limit": 20
+  },
+  "evidence": [
+    {
+      "type": "user->query",
+      "score": 2.0,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "SEARCHED",
+          "w": 2.0
+        },
+        {
+          "label": "Query",
+          "text": "Mình đang tìm tai nghe chống ồn dưới 2 triệu"
+        }
+      ],
+      "product_id": null,
+      "details": {
+        "query_text": "Mình đang tìm tai nghe chống ồn dưới 2 triệu"
+      }
+    },
+    {
+      "type": "user->query",
+      "score": 1.0,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "SEARCHED",
+          "w": 1.0
+        },
+        {
+          "label": "Query",
+          "text": "Gợi ý giúp mình vài sản phẩm phù hợp"
+        }
+      ],
+      "product_id": null,
+      "details": {
+        "query_text": "Gợi ý giúp mình vài sản phẩm phù hợp"
+      }
+    },
+    {
+      "type": "user->query",
+      "score": 1.0,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "SEARCHED",
+          "w": 1.0
+        },
+        {
+          "label": "Query",
+          "text": "Mình cần laptop học lập trình dưới 15 triệu"
+        }
+      ],
+      "product_id": null,
+      "details": {
+        "query_text": "Mình cần laptop học lập trình dưới 15 triệu"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 60.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 60.0
+        },
+        {
+          "label": "Product",
+          "id": 21
+        }
+      ],
+      "product_id": 21,
+      "details": {
+        "product_id": 21,
+        "name": "USB-C Fast Charging Cable",
+        "sku": "CABLE-USB-C",
+        "category": "Accessories",
+        "price": "99000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 40.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 40.0
+        },
+        {
+          "label": "Product",
+          "id": 14
+        }
+      ],
+      "product_id": 14,
+      "details": {
+        "product_id": 14,
+        "name": "HP 15 i5 12th Gen",
+        "sku": "HP-15-I5",
+        "category": "Laptop",
+        "price": "14990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 20.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 20.0
+        },
+        {
+          "label": "Product",
+          "id": 21
+        }
+      ],
+      "product_id": 21,
+      "details": {
+        "product_id": 21,
+        "name": "USB-C Fast Charging Cable",
+        "sku": "CABLE-USB-C",
+        "category": "Accessories",
+        "price": "99000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 20.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 20.0
+        },
+        {
+          "label": "Product",
+          "id": 11
+        }
+      ],
+      "product_id": 11,
+      "details": {
+        "product_id": 11,
+        "name": "Galaxy Tab A9",
+        "sku": "GAL-TAB-A9",
+        "category": "Tablet",
+        "price": "3990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 20.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 20.0
+        },
+        {
+          "label": "Product",
+          "id": 52
+        }
+      ],
+      "product_id": 52,
+      "details": null
+    },
+    {
+      "type": "similar-user->product",
+      "score": 15.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 15.0
+        },
+        {
+          "label": "Product",
+          "id": 14
+        }
+      ],
+      "product_id": 14,
+      "details": {
+        "product_id": 14,
+        "name": "HP 15 i5 12th Gen",
+        "sku": "HP-15-I5",
+        "category": "Laptop",
+        "price": "14990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 10.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 10.0
+        },
+        {
+          "label": "Product",
+          "id": 52
+        }
+      ],
+      "product_id": 52,
+      "details": null
+    },
+    {
+      "type": "similar-user->product",
+      "score": 5.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 5.0
+        },
+        {
+          "label": "Product",
+          "id": 16
+        }
+      ],
+      "product_id": 16,
+      "details": {
+        "product_id": 16,
+        "name": "Galaxy Watch7 44mm",
+        "sku": "WATCH-7-44",
+        "category": "Smartwatch",
+        "price": "3990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 5.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 5.0
+        },
+        {
+          "label": "Product",
+          "id": 8
+        }
+      ],
+      "product_id": 8,
+      "details": {
+        "product_id": 8,
+        "name": "Xiaomi Redmi Note 14 Pro 256GB",
+        "sku": "XM-RN14P-256",
+        "category": "Smartphone",
+        "price": "5850000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 4.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 4.0
+        },
+        {
+          "label": "Product",
+          "id": 11
+        }
+      ],
+      "product_id": 11,
+      "details": {
+        "product_id": 11,
+        "name": "Galaxy Tab A9",
+        "sku": "GAL-TAB-A9",
+        "category": "Tablet",
+        "price": "3990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 4.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 4.0
+        },
+        {
+          "label": "Product",
+          "id": 2
+        }
+      ],
+      "product_id": 2,
+      "details": {
+        "product_id": 2,
+        "name": "Xiaomi Redmi Note 13 256GB",
+        "sku": "XM-RN13-256",
+        "category": "Smartphone",
+        "price": "5990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 3.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 3.0
+        },
+        {
+          "label": "Product",
+          "id": 21
+        }
+      ],
+      "product_id": 21,
+      "details": {
+        "product_id": 21,
+        "name": "USB-C Fast Charging Cable",
+        "sku": "CABLE-USB-C",
+        "category": "Accessories",
+        "price": "99000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 3.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 3.0
+        },
+        {
+          "label": "Product",
+          "id": 47
+        }
+      ],
+      "product_id": 47,
+      "details": null
+    },
+    {
+      "type": "similar-user->product",
+      "score": 3.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 3.0
+        },
+        {
+          "label": "Product",
+          "id": 16
+        }
+      ],
+      "product_id": 16,
+      "details": {
+        "product_id": 16,
+        "name": "Galaxy Watch7 44mm",
+        "sku": "WATCH-7-44",
+        "category": "Smartwatch",
+        "price": "3990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 2.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 2.0
+        },
+        {
+          "label": "Product",
+          "id": 52
+        }
+      ],
+      "product_id": 52,
+      "details": null
+    },
+    {
+      "type": "similar-user->product",
+      "score": 2.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 2.0
+        },
+        {
+          "label": "Product",
+          "id": 14
+        }
+      ],
+      "product_id": 14,
+      "details": {
+        "product_id": 14,
+        "name": "HP 15 i5 12th Gen",
+        "sku": "HP-15-I5",
+        "category": "Laptop",
+        "price": "14990000.00",
+        "currency": "VND"
+      }
+    },
+    {
+      "type": "similar-user->product",
+      "score": 2.3,
+      "path": [
+        {
+          "label": "User",
+          "id": "user-0001"
+        },
+        {
+          "label": "CO_OCCUR_WITH_USER",
+          "other_user_id": "user-0002",
+          "seed_product_id": 36
+        },
+        {
+          "label": "RECOMMENDS",
+          "w": 2.0
+        },
+        {
+          "label": "Product",
+          "id": 26
+        }
+      ],
+      "product_id": 26,
+      "details": null
+    }
+  ],
+  "neo4j_uri_configured": true
+}

@@ -8,6 +8,7 @@ except Exception:  # noqa: BLE001
 
 class ChatTurn(models.Model):
     user_id = models.CharField(max_length=64, db_index=True)
+    session_id = models.CharField(max_length=64, db_index=True, default="default")
     message = models.TextField()
     answer = models.TextField()
     context = models.JSONField(default=dict, blank=True)
@@ -15,6 +16,9 @@ class ChatTurn(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user_id", "session_id", "created_at"], name="ai_chatturn_session_idx"),
+        ]
 
 
 class DocumentChunk(models.Model):
@@ -47,6 +51,27 @@ class ProductEmbedding(models.Model):
 
 
 class UserEmbedding(models.Model):
+    user_id = models.CharField(max_length=64, unique=True, db_index=True)
+    embedding = VectorField(dimensions=64) if VectorField is not None else models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class GnnProductEmbedding(models.Model):
+    """
+    Product embedding trained from a graph model (e.g., LightGCN).
+    Stored separately from the baseline skip-gram embeddings to keep evaluation clean.
+    """
+
+    product_id = models.PositiveBigIntegerField(unique=True, db_index=True)
+    embedding = VectorField(dimensions=64) if VectorField is not None else models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class GnnUserEmbedding(models.Model):
+    """
+    User embedding trained from a graph model (e.g., LightGCN).
+    """
+
     user_id = models.CharField(max_length=64, unique=True, db_index=True)
     embedding = VectorField(dimensions=64) if VectorField is not None else models.JSONField(default=list)
     updated_at = models.DateTimeField(auto_now=True)

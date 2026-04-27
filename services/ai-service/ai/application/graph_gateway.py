@@ -177,10 +177,52 @@ def backfill_product_categories_to_graph(
         driver.close()
 
 
-def recommend_from_graph(user_id: str, limit: int = 10) -> list[GraphRecommendation]:
+def upsert_product_similarity_edges(
+    *,
+    pairs: list[tuple[int, int, float]],
+    rel_name: str = "SIMILAR",
+) -> int:
+    """
+    Create/Update product-product similarity relationships.
+
+    Each pair is (product_id_a, product_id_b, score) where score is in [0,1].
+    Writes both directions by default at the caller level if desired.
+    """
+
+    if not _enabled() or not pairs:
+        return 0
+
+    driver = GraphDatabase.driver(settings.NEO4J_URI, auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD))
+    written = 0
+    try:
+        with driver.session() as session:
+            for a, b, sc in pairs:
+                pa = int(a)
+                pb = int(b)
+                if pa == pb:
+                    continue
+                score = float(sc)
+                session.run("MERGE (p:Product {id: $pid})", pid=pa)
+                session.run("MERGE (p:Product {id: $pid})", pid=pb)
+                session.run(
+                    f"""
+                    MATCH (a:Product {{id: $a}}), (b:Product {{id: $b}})
+                    MERGE (a)-[r:{rel_name}]->(b)
+                    SET r.score = $score
+                    """,
+                    a=pa,
+                    b=pb,
+                    score=score,
+                )
+                written += 1
+    finally:
+        driver.close()
+    return written
+
+def recommend_from_graph(user_id: str, limit: int = 10, *, seed_product_ids: list[int] | None = None) -> list[GraphRecommendation]:
     """
     Recommend products using co-occurrence (users who interacted with the same items)
-    and same-category expansion, excluding products the user already has an edge to.
+    then product similarity expansion, then same-category expansion, excluding products the user already has an edge to.
     """
 
     if not _enabled():
@@ -192,6 +234,9 @@ def recommend_from_graph(user_id: str, limit: int = 10) -> list[GraphRecommendat
         with driver.session() as session:
             seen: set[int] = set()
             out: list[GraphRecommendation] = []
+
+            # Keep room for multiple graph signals (co-occurrence + SIMILAR + category).
+            co_cap = max(1, int(round(limit * 0.6))) if limit >= 3 else limit
 
             res_co = session.run(
                 """
@@ -205,7 +250,7 @@ def recommend_from_graph(user_id: str, limit: int = 10) -> list[GraphRecommendat
                 LIMIT $limit
                 """,
                 user_id=user_id,
-                limit=limit,
+                limit=co_cap,
             )
             for row in res_co:
                 pid = int(row["product_id"])
@@ -217,6 +262,47 @@ def recommend_from_graph(user_id: str, limit: int = 10) -> list[GraphRecommendat
                         product_id=pid,
                         score=float(row["score"]),
                         reason="graph-cooccurrence",
+                    )
+                )
+
+            if len(out) >= limit:
+                return out[:limit]
+
+            remaining = limit - len(out)
+            # Similar-products expansion: items similar to products the user already interacted with.
+            # Requires (:Product)-[:SIMILAR]->(:Product) edges to exist.
+            res_sim = session.run(
+                """
+                MATCH (me:User {id: $user_id})
+                OPTIONAL MATCH (me)-[]->(p:Product)-[:SIMILAR]->(:Product)
+                WITH me, collect(DISTINCT p.id) AS sim_seed_ids
+                WITH me,
+                     CASE WHEN size(sim_seed_ids) > 0 THEN sim_seed_ids ELSE $seed_ids END AS my_ids
+                WHERE size(my_ids) > 0
+                MATCH (p:Product)-[s:SIMILAR]->(rec:Product)
+                WHERE p.id IN my_ids AND NOT rec.id IN my_ids
+                AND NOT (me)-[]->(rec)
+                WITH rec, max(coalesce(s.score, 0.0)) AS score
+                RETURN rec.id AS product_id, score
+                ORDER BY score DESC
+                LIMIT $limit
+                """,
+                user_id=user_id,
+                seed_ids=[int(x) for x in (seed_product_ids or []) if x is not None][:50],
+                limit=remaining + len(seen) + 10,
+            )
+            for row in res_sim:
+                if len(out) >= limit:
+                    break
+                pid = int(row["product_id"])
+                if pid in seen:
+                    continue
+                seen.add(pid)
+                out.append(
+                    GraphRecommendation(
+                        product_id=pid,
+                        score=float(row["score"]),
+                        reason="graph-similar",
                     )
                 )
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { aiChat } from '../api'
+import { aiChat, newChatSessionId } from '../api'
 import { useUserId } from './Layout'
 
 function nowId() {
@@ -28,6 +28,19 @@ export default function ChatWidget() {
   }, [open, messages.length])
 
   const title = useMemo(() => (userId ? `AI Advisor • ${userId}` : 'AI Advisor'), [userId])
+
+  function onNewChat() {
+    newChatSessionId()
+    setError('')
+    setInput('')
+    setMessages([
+      {
+        id: nowId(),
+        role: 'assistant',
+        text: 'Chào bạn, mình là trợ lý ElecShop. Bạn cần tư vấn sản phẩm gì?',
+      },
+    ])
+  }
 
   async function onSend() {
     const text = input.trim()
@@ -75,6 +88,9 @@ export default function ChatWidget() {
         <div className="chatPanel" role="dialog" aria-label="ElecShop assistant">
           <div className="chatHeader">
             <div className="chatTitle">{title}</div>
+            <button className="chatClose" type="button" onClick={onNewChat} aria-label="New chat">
+              New
+            </button>
             <button className="chatClose" type="button" onClick={() => setOpen(false)} aria-label="Close chat">
               ×
             </button>

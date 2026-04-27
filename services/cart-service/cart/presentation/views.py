@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..application.inventory_gateway import InventoryError, release_stock, reserve_stock
@@ -10,7 +11,11 @@ from .serializers import CartItemSerializer, CartSerializer
 
 
 def _get_user_id(request) -> str | None:
-    return request.query_params.get("user_id") or request.headers.get("X-User-Id")
+    qp = request.query_params.get("user_id")
+    hdr = request.headers.get("X-User-Id")
+    if qp and hdr and qp != hdr:
+        raise PermissionDenied("user_id does not match authenticated user")
+    return hdr or qp
 
 
 @api_view(["GET"])
@@ -38,9 +43,8 @@ def add_item(request):
 
     with transaction.atomic():
         item, created = CartItem.objects.get_or_create(cart=cart, product_id=int(product_id))
-        delta = quantity if created else quantity
         try:
-            reserve_stock(int(product_id), int(delta))
+            reserve_stock(int(product_id), int(quantity))
         except InventoryError as e:
             return Response({"detail": str(e)}, status=status.HTTP_409_CONFLICT)
         if created:

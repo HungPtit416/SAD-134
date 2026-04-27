@@ -18,7 +18,7 @@ export default function RecommendedForYou() {
     setLoading(true)
     setError('')
     try {
-      const res = await aiRecommendations(userId, 12)
+      const res = await aiRecommendations(userId, 48)
       const list = Array.isArray(res?.items) ? res.items : []
       setItems(list)
       if (list.length) {
@@ -119,6 +119,7 @@ export default function RecommendedForYou() {
                         <div className="priceBlock">
                           <div className="priceNow">{money(p.price, 'VND')}</div>
                         </div>
+                        {p?.category?.name ? <div className="mutedSmall">{p.category.name}</div> : null}
                         {p.rank != null ? (
                           <div className="metaRow">
                             <span className="chip">Gợi ý #{p.rank}</span>

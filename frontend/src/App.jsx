@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import Cart from './pages/Cart'
+import Checkout from './pages/Checkout'
 import Login from './pages/Login'
 import OrderDetail from './pages/OrderDetail'
 import Orders from './pages/Orders'
+import PaymentReturn from './pages/PaymentReturn'
 import ProductDetail from './pages/ProductDetail'
 import Products from './pages/Products'
 import RecommendedForYou from './pages/RecommendedForYou'
@@ -18,6 +20,8 @@ export default function App() {
         <Route path="/recommended" element={<RecommendedForYou />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/cart" element={<Cart />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/payment-return" element={<PaymentReturn />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetail />} />
         <Route path="/login" element={<Login />} />

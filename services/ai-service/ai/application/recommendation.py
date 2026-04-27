@@ -8,7 +8,7 @@ from .interaction_gateway import list_events
 from .product_gateway import Product, get_product, list_products
 from .graph_gateway import recommend_from_graph, user_product_edge_count
 from .sequence_predictor import predict_next_action
-from ..infrastructure.models import ProductEmbedding, UserEmbedding
+from ..infrastructure.models import GnnProductEmbedding, GnnUserEmbedding, ProductEmbedding, UserEmbedding
 
 
 @dataclass(frozen=True)
@@ -99,6 +99,39 @@ def _recommendations_from_embeddings(user_id: str, limit: int) -> list[Recommend
     ]
 
 
+def _recommendations_from_gnn_embeddings(user_id: str, limit: int) -> list[Recommendation]:
+    """
+    Phase-4 embeddings trained from LightGCN.
+    Stored separately (GnnUserEmbedding/GnnProductEmbedding) for clean evaluation.
+    """
+
+    try:
+        from pgvector.django import CosineDistance
+    except Exception:  # noqa: BLE001
+        CosineDistance = None  # type: ignore[assignment]
+
+    if CosineDistance is None:
+        return []
+
+    ue = GnnUserEmbedding.objects.filter(user_id=user_id).first()
+    if ue is None:
+        return []
+
+    events = list_events(user_id, limit=200)
+    interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
+    qs = (
+        GnnProductEmbedding.objects.all()
+        .exclude(product_id__in=list(interacted))
+        .order_by(CosineDistance("embedding", ue.embedding))[:limit]
+    )
+    rows = list(qs)
+    if not rows:
+        return []
+    return [
+        Recommendation(product_id=int(r.product_id), score=float(1.0 / (1e-6 + i + 1)), reason="gnn-embedding")
+        for i, r in enumerate(rows)
+    ]
+
 def _recommendations_from_seed_products(user_id: str, seed_product_ids: list[int] | None, limit: int) -> list[Recommendation]:
     if not seed_product_ids:
         return []
@@ -156,17 +189,38 @@ def recommend_products(
 
     q_recs = _recommendations_from_query(user_id, query, limit=limit)
     seed_recs = _recommendations_from_seed_products(user_id, seed_product_ids, limit=limit)
-    graph = recommend_from_graph(user_id, limit=limit)
+    graph = recommend_from_graph(user_id, limit=limit, seed_product_ids=seed_product_ids or None)
     emb = _recommendations_from_embeddings(user_id, limit=limit)
+    gnn = _recommendations_from_gnn_embeddings(user_id, limit=limit)
 
     pred = predict_next_action(user_id, seq_len=6)
+    seed_pref = bool(seed_product_ids)
+
+    # If phase-4 GNN embeddings exist, prefer them as the strongest learned signal.
+    # Then blend graph and baseline embeddings for robustness.
+    if gnn:
+        items = _rerank_by_next_action(gnn, pred.action, limit)
+        # Fill with graph/embeddings if needed.
+        items = _dedupe_recommendations(items + graph + emb, limit)
+        if seed_pref:
+            items = _dedupe_recommendations(q_recs + items, limit)
+            if len(items) < limit:
+                items = _dedupe_recommendations(items + seed_recs, limit)
+        else:
+            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+        return _rerank_by_query(items, query, limit)
 
     if graph and emb:
         has_cooc = any(g.reason == "graph-cooccurrence" for g in graph)
         if has_cooc:
             items = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
             items = _rerank_by_next_action(items, pred.action, limit)
-            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+            if seed_pref:
+                items = _dedupe_recommendations(q_recs + items, limit)
+                if len(items) < limit:
+                    items = _dedupe_recommendations(items + seed_recs, limit)
+            else:
+                items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
             return _rerank_by_query(items, query, limit)
 
         edges = user_product_edge_count(user_id)
@@ -184,15 +238,30 @@ def recommend_products(
     if graph:
         items = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
         items = _rerank_by_next_action(items, pred.action, limit)
-        items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+        if seed_pref:
+            items = _dedupe_recommendations(q_recs + items, limit)
+            if len(items) < limit:
+                items = _dedupe_recommendations(items + seed_recs, limit)
+        else:
+            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
         return _rerank_by_query(items, query, limit)
 
     if emb:
         items = _rerank_by_next_action(emb, pred.action, limit)
-        items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+        if seed_pref:
+            items = _dedupe_recommendations(q_recs + items, limit)
+            if len(items) < limit:
+                items = _dedupe_recommendations(items + seed_recs, limit)
+        else:
+            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
         return _rerank_by_query(items, query, limit)
 
     events = list_events(user_id, limit=200)
+    # If the user has no behavior yet (cold start) and the UI didn't provide query/seeds,
+    # return empty to avoid showing "random popular" items.
+    meaningful = [e for e in events if (e.product_id is not None) or (e.query or "").strip()]
+    if not meaningful and not (query or "").strip() and not seed_product_ids:
+        return []
     interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
 
     cat_scores: dict[int, float] = {}
@@ -226,7 +295,12 @@ def recommend_products(
 
     scored.sort(key=lambda x: x.score, reverse=True)
     items = _rerank_by_next_action(scored[:limit], pred.action, limit)
-    items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+    if seed_pref:
+        items = _dedupe_recommendations(q_recs + items, limit)
+        if len(items) < limit:
+            items = _dedupe_recommendations(items + seed_recs, limit)
+    else:
+        items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
     return _rerank_by_query(items, query, limit)
 
 

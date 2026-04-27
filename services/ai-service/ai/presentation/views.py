@@ -17,6 +17,7 @@ def recommendations(request):
             "limit": request.query_params.get("limit"),
             "query": request.query_params.get("query"),
             "seed_product_ids": request.query_params.get("seed_product_ids"),
+            "debug": request.query_params.get("debug"),
         }
     )
     ser.is_valid(raise_exception=True)
@@ -38,6 +39,15 @@ def recommendations(request):
 
     recs = recommend_products(user_id, limit=limit, query=q, seed_product_ids=seed_ids or None)
     pred = predict_next_action(user_id, seq_len=6)
+
+    debug_raw = (ser.validated_data.get("debug") or "").strip().lower()
+    debug = debug_raw in {"1", "true", "yes", "y", "on"}
+    debug_items = None
+    if debug:
+        debug_items = [
+            {"product_id": int(r.product_id), "score": float(r.score), "reason": str(r.reason)}
+            for r in recs
+        ]
     return Response(
         {
             "user_id": user_id,
@@ -45,6 +55,7 @@ def recommendations(request):
             "query": q,
             "seed_product_ids": seed_ids,
             "items": hydrate_products(recs),
+            "debug_items": debug_items,
         }
     )
 
@@ -68,8 +79,14 @@ def chat(request):
     ser = ChatRequestSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     user_id = ser.validated_data["user_id"]
+    session_id = (ser.validated_data.get("session_id") or "").strip() or "default"
     message = ser.validated_data["message"]
+    debug_raw = (ser.validated_data.get("debug") or "").strip().lower()
+    debug = debug_raw in {"1", "true", "yes", "y", "on"}
 
-    result = answer_chat(user_id, message)
-    return Response({"answer": result.answer, "context": result.context}, status=status.HTTP_200_OK)
+    result = answer_chat(user_id, message, session_id=session_id)
+    return Response(
+        {"answer": result.answer, "context": (result.context if debug else {"enabled": True})},
+        status=status.HTTP_200_OK,
+    )
 

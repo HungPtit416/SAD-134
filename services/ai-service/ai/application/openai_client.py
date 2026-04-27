@@ -105,7 +105,15 @@ def chat_completion(*, system: str, user: str) -> str:
         resp = gc.models.generate_content(
             model=getattr(settings, "GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
             contents=prompt,
-            config=(genai_types.GenerateContentConfig(temperature=0.4) if genai_types is not None else None),
+            config=(
+                genai_types.GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=1024,
+                    thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+                )
+                if genai_types is not None
+                else None
+            ),
         )
         return (getattr(resp, "text", "") or "").strip()
 

@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "users": 50,
+  "methods": {
+    "phase4_lightgcn": {
+      "evaluated_users": 0,
+      "missing_users": 50,
+      "metrics": {
+        "recall@5": 0.0,
+        "recall@10": 0.0,
+        "ndcg@5": 0.0,
+        "ndcg@10": 0.0
+      }
+    },
+    "phase2_skipgram": {
+      "evaluated_users": 50,
+      "missing_users": 0,
+      "metrics": {
+        "recall@5": 0.14,
+        "recall@10": 0.22,
+        "ndcg@5": 0.10047438028571662,
+        "ndcg@10": 0.12623771901258585
+      }
+    }
+  }
+}

@@ -1,21 +1,65 @@
 user_id,rel_type,target_id,target_labels,weight
-seed-user-027,PURCHASED,26,Product,600
-seed-user-029,ADDED_TO_CART,1,Product,500
-seed-user-028,PURCHASED,3,Product,400
-seed-user-030,PURCHASED,16,Product,400
-seed-user-027,PURCHASED,19,Product,400
-seed-user-030,ADDED_TO_CART,12,Product,310
-seed-user-027,PURCHASED,5,Product,230
-seed-user-030,ADDED_TO_CART,20,Product,210
-seed-user-030,PURCHASED,26,Product,210
-seed-user-030,ADDED_TO_CART,11,Product,210
-seed-user-030,PURCHASED,12,Product,210
-seed-user-029,ADDED_TO_CART,4,Product,200
-seed-user-029,ADDED_TO_CART,18,Product,200
-seed-user-030,PURCHASED,5,Product,200
-seed-user-029,PURCHASED,10,Product,200
-seed-user-028,ADDED_TO_CART,3,Product,200
-seed-user-030,PURCHASED,28,Product,200
-seed-user-030,PURCHASED,1,Product,200
-seed-user-029,ADDED_TO_CART,14,Product,200
-seed-user-029,PURCHASED,5,Product,200
+user1@gmail.com,ADDED_TO_CART,19,Product,10.0
+user1@gmail.com,ADDED_TO_CART,20,Product,10.0
+3,SEARCHED,"Mình cần laptop học lập trình tầm 15-20 triệu, ưu tiên pin",Query,7.0
+3,SEARCHED,"Mình cần laptop học lập trình tầm 15-20 triệu, ưu tiên pin",Query,7.0
+user1@gmail.com,ADDED_TO_CART,23,Product,5.0
+user1@gmail.com,ADDED_TO_CART,5,Product,5.0
+user1@gmail.com,ADDED_TO_CART,1,Product,5.0
+user1@gmail.com,ADDED_TO_CART,9,Product,5.0
+user1@gmail.com,ADDED_TO_CART,10,Product,5.0
+user2@gmail.com,ADDED_TO_CART,3,Product,5.0
+user2@gmail.com,ADDED_TO_CART,15,Product,5.0
+user3@gmail.com,ADDED_TO_CART,1,Product,5.0
+3,SEARCHED,"Tư vấn tai nghe chống ồn cho iPhone, dưới 2 triệu",Query,2.0
+3,SEARCHED,"Tư vấn tai nghe chống ồn cho iPhone, dưới 2 triệu",Query,2.0
+user1@gmail.com,SEARCHED,tôi cần mua điện thoại thông minh,Query,2.0
+chat_domain_test@example.com,SEARCHED,toi can mua laptop,Query,2.0
+user1@gmail.com,SEARCHED,chụp ảnh đẹp,Query,1.0
+user1@gmail.com,SEARCHED,ngân sách dưới 30 triệu,Query,1.0
+user1@gmail.com,SEARCHED,ngân sách dưới 20 triệu,Query,1.0
+user1@gmail.com,SEARCHED,samsung,Query,1.0
+user1@gmail.com,SEARCHED,ngân sách dự kiến dưới 10 triệu,Query,1.0
+user1@gmail.com,SEARCHED,"điện thoại samsung chụp ảnh đẹp, pin trâu",Query,1.0
+user1@gmail.com,SEARCHED,"tôi cần chụp ảnh đẹp, pin trâu",Query,1.0
+user1@gmail.com,SEARCHED,điện thoại samsung,Query,1.0
+user1@gmail.com,SEARCHED,tôi thích mua samsung,Query,1.0
+user1@gmail.com,SEARCHED,tôi cần mua phụ kiện dây sạc,Query,1.0
+user1@gmail.com,SEARCHED,tôi cần iphone 14,Query,1.0
+user1@gmail.com,SEARCHED,tôi thích mua iphone,Query,1.0
+user1@gmail.com,SEARCHED,tôi cần mua điện thoại,Query,1.0
+user1@gmail.com,SEARCHED,tôi cần laptop để chơi game,Query,1.0
+user1@gmail.com,SEARCHED,tôi cần mua laptop,Query,1.0
+u1,SEARCHED,"Mình cần chụp ảnh đẹp, pin trâu, dưới 10 triệu",Query,1.0
+u1,SEARCHED,Mình muốn mua điện thoại Samsung,Query,1.0
+u2,SEARCHED,Mình muốn mua điện thoại,Query,1.0
+u2,SEARCHED,"Mình thích Samsung, chụp ảnh đẹp, pin trâu",Query,1.0
+u3,SEARCHED,"chụp ảnh đẹp, pin trâu",Query,1.0
+u3,SEARCHED,ngân sách dưới 30 triệu,Query,1.0
+u3,SEARCHED,samsung,Query,1.0
+u3,SEARCHED,tôi cần mua điện thoại thông minh,Query,1.0
+u4,SEARCHED,"chụp ảnh đẹp, pin trâu",Query,1.0
+u4,SEARCHED,ngân sách dưới 30 triệu,Query,1.0
+u4,SEARCHED,điện thoại samsung,Query,1.0
+u5,SEARCHED,"chụp ảnh đẹp, pin trâu",Query,1.0
+u5,SEARCHED,ngân sách dưới 30 triệu,Query,1.0
+u5,SEARCHED,điện thoại samsung,Query,1.0
+u6,SEARCHED,"chụp ảnh đẹp, pin trâu",Query,1.0
+u6,SEARCHED,ngân sách dưới 30 triệu,Query,1.0
+u6,SEARCHED,điện thoại samsung,Query,1.0
+u7,SEARCHED,ưu tiên pin,Query,1.0
+u7,SEARCHED,dưới 20 triệu,Query,1.0
+u7,SEARCHED,mình cần laptop học lập trình,Query,1.0
+u8,SEARCHED,cần cáp sạc usb-c,Query,1.0
+u8,SEARCHED,dưới 500k,Query,1.0
+u8,SEARCHED,mình cần phụ kiện cho iPhone 15,Query,1.0
+guest,SEARCHED,tôi cần mua laptop,Query,1.0
+user4@gmail.com,VIEWED,5,Product,1.0
+user4@gmail.com,VIEWED,9,Product,1.0
+user4@gmail.com,VIEWED,2,Product,1.0
+user4@gmail.com,SEARCHED,làm việc văn phòng,Query,1.0
+chat_domain_test@example.com,SEARCHED,lam viec van phong,Query,1.0
+chat_domain_test@example.com,SEARCHED,tôi cần mua laptop,Query,1.0
+user2@gmail.com,VIEWED,3,Product,1.0
+user2@gmail.com,VIEWED,15,Product,1.0
+user3@gmail.com,VIEWED,1,Product,1.0

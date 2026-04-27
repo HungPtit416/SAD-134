@@ -1,0 +1,29 @@
+/* Hide demo hint in login page without rebuilding frontend bundle */
+.authPanel .mutedSmall {
+  display: none !important;
+}
+
+/* Recommended page: hide debug chips (rank/source) */
+.recGrid .metaRow,
+.recGrid .chip {
+  display: none !important;
+}
+
+/* Chat: only show on Products pages (JS also enforces) */
+.chatDock.sadChatHidden {
+  display: none !important;
+}
+
+/* Chat header buttons: make "New" clearer */
+.chatHeader .chatClose.sadNewChatBtn {
+  min-width: 52px;
+}
+
+button[aria-label="New chat"].chatClose {
+  padding: 6px 10px !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  height: 34px !important;
+  line-height: 20px !important;
+}
+

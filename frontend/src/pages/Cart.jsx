@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { aiRecommendations, checkout, getCart, removeCartItem, setCartItemQuantity, trackEvent } from '../api'
+import { aiRecommendations, getCart, removeCartItem, setCartItemQuantity, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import ProductImage from '../components/ProductImage'
 import { useToast } from '../components/Toast'
@@ -78,18 +78,7 @@ export default function Cart() {
   }
 
   async function onCheckout() {
-    setLoading(true)
-    setError('')
-    try {
-      const order = await checkout(userId)
-      toast.push({ title: 'Order created', message: `Order #${order.id} created successfully.` })
-      nav(`/orders/${order.id}`)
-    } catch (e) {
-      setError(e?.message || 'Checkout failed')
-      toast.push({ type: 'error', title: 'Checkout failed', message: e?.message || '' })
-    } finally {
-      setLoading(false)
-    }
+    nav('/checkout')
   }
 
   return (

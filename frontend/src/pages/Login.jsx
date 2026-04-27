@@ -59,9 +59,6 @@ export default function Login() {
           <button className="btnPrimary" disabled={loading} type="submit">
             Login
           </button>
-          <div className="mutedSmall">
-            Seeded users: <b>user1@gmail.com</b> / <b>123456</b> and <b>user2@gmail.com</b> / <b>123456</b>
-          </div>
         </form>
       </div>
     </div>
