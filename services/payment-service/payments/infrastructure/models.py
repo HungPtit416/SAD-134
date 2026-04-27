@@ -2,9 +2,7 @@ from django.db import models
 
 
 class Payment(models.Model):
-    """
-    Mock payment record for the course project.
-    """
+   
 
     user_id = models.CharField(max_length=64)
     order_id = models.PositiveBigIntegerField(db_index=True)
