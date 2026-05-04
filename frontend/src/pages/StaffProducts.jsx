@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import {
   getStaffEmail,
+  getStockByProducts,
   listCategories,
   listProducts,
   staffCreateProduct,
   staffDeleteProduct,
   staffLogout,
   staffUpdateProduct,
+  staffUpsertStock,
 } from '../api'
 
 function emptyDraft() {
@@ -20,6 +22,7 @@ function emptyDraft() {
     currency: 'VND',
     category_id: '',
     is_active: true,
+    stock_quantity: '',
   }
 }
 
@@ -33,6 +36,7 @@ export default function StaffProducts() {
   const [categories, setCategories] = useState([])
   const [draft, setDraft] = useState(emptyDraft())
   const [editingId, setEditingId] = useState(null)
+  const [stockByProductId, setStockByProductId] = useState({})
 
   const categoriesById = useMemo(() => {
     const m = new Map()
@@ -46,6 +50,17 @@ export default function StaffProducts() {
       const [cats, prods] = await Promise.all([listCategories(), listProducts()])
       setCategories(cats)
       setProducts(prods)
+      const ids = prods.map((p) => p.id).filter((id) => id != null)
+      if (ids.length) {
+        const rows = await getStockByProducts(ids)
+        const m = {}
+        for (const row of rows) {
+          if (row?.product_id != null) m[row.product_id] = row
+        }
+        setStockByProductId(m)
+      } else {
+        setStockByProductId({})
+      }
     } catch (err) {
       toast.push({ type: 'error', title: 'Load failed', message: err?.message || '' })
     } finally {
@@ -69,6 +84,7 @@ export default function StaffProducts() {
 
   function startEdit(p) {
     setEditingId(p.id)
+    const st = stockByProductId[p.id]
     setDraft({
       sku: p.sku || '',
       name: p.name || '',
@@ -77,6 +93,7 @@ export default function StaffProducts() {
       currency: p.currency || 'VND',
       category_id: p.category?.id != null ? String(p.category.id) : '',
       is_active: !!p.is_active,
+      stock_quantity: st?.quantity != null ? String(st.quantity) : '',
     })
   }
 
@@ -97,12 +114,24 @@ export default function StaffProducts() {
     }
 
     try {
+      let productId = editingId
       if (editingId) {
         await staffUpdateProduct(editingId, payload)
         toast.push({ title: 'Updated', message: 'Đã cập nhật sản phẩm.' })
       } else {
-        await staffCreateProduct(payload)
+        const created = await staffCreateProduct(payload)
+        productId = created?.id
         toast.push({ title: 'Created', message: 'Đã tạo sản phẩm.' })
+      }
+      const sq = String(draft.stock_quantity ?? '').trim()
+      if (productId != null && sq !== '') {
+        const qty = Number(sq)
+        if (!Number.isFinite(qty) || qty < 0 || !Number.isInteger(qty)) {
+          toast.push({ type: 'error', title: 'Stock', message: 'Số lượng tồn kho phải là số nguyên ≥ 0.' })
+          await reload()
+          return
+        }
+        await staffUpsertStock(productId, { quantity: qty })
       }
       await reload()
       startCreate()
@@ -151,6 +180,7 @@ export default function StaffProducts() {
                   <th style={{ padding: '10px 12px' }}>Tên</th>
                   <th style={{ padding: '10px 12px' }}>Category</th>
                   <th style={{ padding: '10px 12px' }}>Giá</th>
+                  <th style={{ padding: '10px 12px' }}>Tồn kho</th>
                   <th style={{ padding: '10px 12px' }}>Active</th>
                   <th style={{ padding: '10px 12px' }} />
                 </tr>
@@ -167,6 +197,9 @@ export default function StaffProducts() {
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       {p.price} {p.currency}
                     </td>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      {stockByProductId[p.id]?.quantity != null ? stockByProductId[p.id].quantity : '—'}
+                    </td>
                     <td style={{ padding: '10px 12px' }}>{p.is_active ? 'Yes' : 'No'}</td>
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <button className="btn" type="button" onClick={() => startEdit(p)} style={{ marginRight: 8 }}>
@@ -180,7 +213,7 @@ export default function StaffProducts() {
                 ))}
                 {!products.length && !loading ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: 14, opacity: 0.7 }}>
+                    <td colSpan={7} style={{ padding: 14, opacity: 0.7 }}>
                       No products.
                     </td>
                   </tr>
@@ -236,6 +269,16 @@ export default function StaffProducts() {
                 />
               </label>
             </div>
+            <label className="field">
+              <div className="fieldLabel">Tồn kho (số lượng)</div>
+              <input
+                className="input"
+                inputMode="numeric"
+                value={draft.stock_quantity}
+                onChange={(e) => setDraft((d) => ({ ...d, stock_quantity: e.target.value }))}
+                placeholder="Ví dụ: 50 (để trống nếu không đổi / chưa gán)"
+              />
+            </label>
             <label className="field">
               <div className="fieldLabel">Category</div>
               <select

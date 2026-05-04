@@ -104,21 +104,13 @@ NEO4J_URI = os.environ.get("NEO4J_URI", "")
 NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "neo4j-password")
 
-# OpenAI (optional; chat falls back if missing)
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
-OPENAI_EMBED_MODEL = os.environ.get("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-
-# Gemini (optional; used when OpenAI is not configured or provider selects it)
+# Gemini (required for chat; required for embeddings unless EMBEDDING_PROVIDER=local)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
 GEMINI_EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 
-# Providers:
-# - EMBEDDING_PROVIDER: "openai" | "gemini" | "local"
-# - CHAT_PROVIDER: "openai" | "gemini"
-EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "openai")
-CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "openai")
+# EMBEDDING_PROVIDER: "gemini" | "local"
+EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "gemini")
 
 # Recommender: when both graph + behavior embeddings exist, prefer co-occurrence graph if true;
 # if graph only has same-category signal, blend with embeddings when user has at least this many product edges.

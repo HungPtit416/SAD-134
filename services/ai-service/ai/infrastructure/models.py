@@ -32,7 +32,7 @@ class DocumentChunk(models.Model):
     content = models.TextField()
     metadata = models.JSONField(default=dict, blank=True)
 
-    # text-embedding-3-small uses 1536 dimensions
+    # Gemini embeddings (output_dimensionality=1536 in llm_client) match this column
     embedding = VectorField(dimensions=1536) if VectorField is not None else models.JSONField(default=list)
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

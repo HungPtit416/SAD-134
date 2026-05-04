@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from django.db import transaction
 
 from ..infrastructure.models import DocumentChunk
-from .openai_client import embed_texts
+from .llm_client import embed_texts
 from .product_gateway import list_products
 
 

@@ -315,10 +315,26 @@ export async function getCart(userId) {
   })
 }
 
+const INVENTORY_API = import.meta.env.VITE_INVENTORY_API_BASE || 'http://localhost:8005'
+
 export async function getStockByProducts(productIds) {
   const ids = productIds.join(',')
-  const data = await httpJson(`${import.meta.env.VITE_INVENTORY_API_BASE || 'http://localhost:8005'}/api/stock/by-products/?ids=${encodeURIComponent(ids)}`)
+  const data = await httpJson(`${INVENTORY_API}/api/stock/by-products/?ids=${encodeURIComponent(ids)}`)
   return Array.isArray(data) ? data : []
+}
+
+/** Set stock for a product (inventory-service). quantity is on-hand units. */
+export async function staffUpsertStock(productId, { quantity, initial_quantity } = {}) {
+  const body = { product_id: Number(productId), quantity: Number(quantity) }
+  if (initial_quantity != null && initial_quantity !== '') {
+    body.initial_quantity = Number(initial_quantity)
+  }
+  return await httpJson(`${INVENTORY_API}/api/stock/upsert/`, {
+    method: 'POST',
+    headers: staffAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+    __authKind: 'staff',
+  })
 }
 
 export async function addToCart(userId, productId, quantity) {

@@ -70,6 +70,55 @@ def _dedupe_recommendations(items: list[Recommendation], limit: int) -> list[Rec
     return out
 
 
+def _recommendations_from_event_categories(user_id: str, limit: int) -> list[Recommendation]:
+    """
+    Same-category picks from weighted recent events (view / cart / purchase).
+    Used to prepend signal when graph or embedding recommenders ignore category.
+    """
+
+    events = list_events(user_id, limit=200)
+    interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
+
+    cat_scores: dict[int, float] = {}
+    for e in events:
+        if e.product_id is None:
+            continue
+        try:
+            p = get_product(int(e.product_id))
+        except Exception:  # noqa: BLE001
+            continue
+        if p.category_id is None:
+            continue
+        w = 1.0
+        if e.event_type == "add_to_cart":
+            w = 3.0
+        elif e.event_type == "purchase":
+            w = 5.0
+        cat_scores[p.category_id] = cat_scores.get(p.category_id, 0.0) + w
+
+    if not cat_scores:
+        return []
+
+    try:
+        products = list_products()
+    except Exception:  # noqa: BLE001
+        return []
+
+    scored: list[Recommendation] = []
+    for p in products:
+        if p.id in interacted:
+            continue
+        score = 0.0
+        reason = "popular"
+        if p.category_id is not None and p.category_id in cat_scores:
+            score += cat_scores[p.category_id]
+            reason = "same-category"
+        scored.append(Recommendation(product_id=p.id, score=score, reason=reason))
+
+    scored.sort(key=lambda x: x.score, reverse=True)
+    return scored[:limit]
+
+
 def _recommendations_from_embeddings(user_id: str, limit: int) -> list[Recommendation]:
     try:
         from pgvector.django import CosineDistance
@@ -182,6 +231,8 @@ def recommend_products(
     - Strong graph: at least one co-occurrence hit → prefer graph.
     - Weak graph (only same-category expansion) → prefer embeddings first, then fill from graph.
     When only one source exists, use it; else category heuristics from recent events.
+    Same-category picks from recent views/carts/purchases are prepended whenever graph or embeddings
+    are blended so short accessory-heavy sessions are not drowned out by global embedding neighbors.
     """
 
     limit = max(1, min(50, int(limit)))
@@ -195,6 +246,7 @@ def recommend_products(
 
     pred = predict_next_action(user_id, seq_len=6)
     seed_pref = bool(seed_product_ids)
+    behavior_cat_recs = _recommendations_from_event_categories(user_id, limit)
 
     # If phase-4 GNN embeddings exist, prefer them as the strongest learned signal.
     # Then blend graph and baseline embeddings for robustness.
@@ -203,11 +255,11 @@ def recommend_products(
         # Fill with graph/embeddings if needed.
         items = _dedupe_recommendations(items + graph + emb, limit)
         if seed_pref:
-            items = _dedupe_recommendations(q_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + behavior_cat_recs + items, limit)
             if len(items) < limit:
                 items = _dedupe_recommendations(items + seed_recs, limit)
         else:
-            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
         return _rerank_by_query(items, query, limit)
 
     if graph and emb:
@@ -216,11 +268,11 @@ def recommend_products(
             items = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
             items = _rerank_by_next_action(items, pred.action, limit)
             if seed_pref:
-                items = _dedupe_recommendations(q_recs + items, limit)
+                items = _dedupe_recommendations(q_recs + behavior_cat_recs + items, limit)
                 if len(items) < limit:
                     items = _dedupe_recommendations(items + seed_recs, limit)
             else:
-                items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+                items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
             return _rerank_by_query(items, query, limit)
 
         edges = user_product_edge_count(user_id)
@@ -228,32 +280,32 @@ def recommend_products(
             graph_recs = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
             items = _dedupe_recommendations(emb + graph_recs, limit)
             items = _rerank_by_next_action(items, pred.action, limit)
-            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
             return _rerank_by_query(items, query, limit)
 
         items = _rerank_by_next_action(emb, pred.action, limit)
-        items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+        items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
         return _rerank_by_query(items, query, limit)
 
     if graph:
         items = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
         items = _rerank_by_next_action(items, pred.action, limit)
         if seed_pref:
-            items = _dedupe_recommendations(q_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + behavior_cat_recs + items, limit)
             if len(items) < limit:
                 items = _dedupe_recommendations(items + seed_recs, limit)
         else:
-            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
         return _rerank_by_query(items, query, limit)
 
     if emb:
         items = _rerank_by_next_action(emb, pred.action, limit)
         if seed_pref:
-            items = _dedupe_recommendations(q_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + behavior_cat_recs + items, limit)
             if len(items) < limit:
                 items = _dedupe_recommendations(items + seed_recs, limit)
         else:
-            items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
+            items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
         return _rerank_by_query(items, query, limit)
 
     events = list_events(user_id, limit=200)
@@ -352,16 +404,20 @@ def _rerank_by_next_action(items: list[Recommendation], next_action: str | None,
         reason_pri = {
             "graph-cooccurrence": 0,
             "behavior-embedding": 1,
+            "gnn-embedding": 1,
             "graph-same-category": 2,
             "same-category": 3,
+            "seed-category": 3,
             "popular": 4,
         }
     else:
         # discovery intent
         reason_pri = {
             "behavior-embedding": 0,
+            "gnn-embedding": 0,
             "graph-same-category": 1,
             "same-category": 2,
+            "seed-category": 2,
             "graph-cooccurrence": 3,
             "popular": 4,
         }
