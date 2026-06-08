@@ -110,7 +110,7 @@ export default function RecommendedForYou() {
                   <div className="cardBody">
                     <div className="productCardVertical">
                       <div className="productMedia">
-                        <ProductImage name={p.name} sku={p.sku} size={220} />
+                        <ProductImage name={p.name} sku={p.sku} url={p.image} size={220} />
                       </div>
                       <div className="productInfo">
                         <Link to={`/products/${p.id}`} className="productName vertical">

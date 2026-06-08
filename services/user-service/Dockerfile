@@ -12,5 +12,5 @@ COPY . /app
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python wait_for_db.py && python manage.py migrate && python manage.py shell -c \"from users.infrastructure.seed import seed; seed()\" && gunicorn user_service.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 4"]
+CMD ["sh", "-c", "python wait_for_db.py && python manage.py migrate && python manage.py shell -c \"from users.infrastructure.seed import seed; seed()\" && python manage.py runserver 0.0.0.0:8000"]
 

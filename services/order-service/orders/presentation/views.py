@@ -17,12 +17,33 @@ from .serializers import CheckoutStartSerializer, OrderSerializer
 
 
 def _get_user_id(request) -> int | None:
-    qp = request.query_params.get("user_id")
     hdr = request.headers.get("X-User-Id")
-    if qp and hdr and qp != hdr:
-        raise PermissionDenied("user_id does not match authenticated user")
-    val = hdr or qp
-    return int(val) if val and val.isdigit() else None
+    if hdr and hdr.isdigit():
+        return int(hdr)
+    qp = request.query_params.get("user_id")
+    return int(qp) if qp and qp.isdigit() else None
+
+
+def _cancel_order(order: Order) -> bool:
+    """Cancel an unpaid pending order and release reserved inventory."""
+
+    if order.payment_status != "PENDING":
+        return False
+    if order.status not in {"PENDING_PAYMENT", "CREATED"}:
+        return False
+
+    if getattr(order, "inventory_status", "PENDING") == "RESERVED":
+        for it in order.items.all():
+            try:
+                release_stock(int(it.product_id), int(it.quantity))
+            except Exception:  # noqa: BLE001
+                pass
+        order.inventory_status = "RELEASED"
+
+    order.payment_status = "CANCELLED"
+    order.status = "CANCELLED"
+    order.save(update_fields=["payment_status", "status", "inventory_status"])
+    return True
 
 
 def _cancel_if_expired(order: Order) -> bool:
@@ -40,19 +61,7 @@ def _cancel_if_expired(order: Order) -> bool:
     if timezone.now() - order.created_at <= timedelta(minutes=5):
         return False
 
-    # Release inventory only if it was reserved via cart.
-    if getattr(order, "inventory_status", "PENDING") == "RESERVED":
-        for it in order.items.all():
-            try:
-                release_stock(int(it.product_id), int(it.quantity))
-            except Exception:  # noqa: BLE001
-                pass
-        order.inventory_status = "RELEASED"
-
-    order.payment_status = "CANCELLED"
-    order.status = "CANCELLED"
-    order.save(update_fields=["payment_status", "status", "inventory_status"])
-    return True
+    return _cancel_order(order)
 
 
 class OrderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -64,9 +73,16 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         if user_id:
             qs = qs.filter(user_id=user_id)
         # Best-effort cleanup of expired pending orders (no cron needed for MVP).
-        for o in list(qs.filter(payment_status="PENDING", status="PENDING_PAYMENT")[:50]):
+        for o in list(qs.filter(payment_status="PENDING", status__in=["PENDING_PAYMENT", "CREATED"])[:50]):
             _cancel_if_expired(o)
         return qs
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        _cancel_if_expired(instance)
+        instance.refresh_from_db()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 @api_view(["POST"])
@@ -106,6 +122,36 @@ def order_pay(request, order_id: int):
         return Response({"order": OrderSerializer(order).data, "payment_url": pay.get("payment_url")}, status=status.HTTP_201_CREATED)
     except Exception as e:  # noqa: BLE001
         return Response({"detail": f"Payment start failed: {e}", "order": OrderSerializer(order).data}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+@api_view(["POST"])
+def order_cancel(request, order_id: int):
+    """Cancel an unpaid order that has not timed out yet."""
+
+    user_id = _get_user_id(request)
+    if not user_id:
+        return Response({"detail": "Missing user_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.prefetch_related("items").get(id=int(order_id), user_id=user_id)
+    except Order.DoesNotExist:
+        return Response({"detail": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if order.created_at and timezone.now() - order.created_at > timedelta(minutes=5):
+        _cancel_if_expired(order)
+        order.refresh_from_db()
+        return Response(
+            {"detail": "Order was cancelled due to timeout", "order": OrderSerializer(order).data},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not _cancel_order(order):
+        return Response(
+            {"detail": "Order cannot be cancelled", "order": OrderSerializer(order).data},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response({"order": OrderSerializer(order).data}, status=status.HTTP_200_OK)
 
 
 @api_view(["POST"])

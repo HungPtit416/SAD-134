@@ -4,7 +4,17 @@ function hashToHue(str) {
   return h
 }
 
-export default function ProductImage({ name, sku, size = 72 }) {
+export default function ProductImage({ name, sku, url, size = 72 }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={name || sku || 'Product'}
+        style={{ width: size, height: size, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+      />
+    )
+  }
+
   const key = `${sku || ''}${name || ''}`
   const hue = hashToHue(key || 'product')
   const bg = `linear-gradient(135deg, hsl(${hue} 35% 94%), hsl(${(hue + 28) % 360} 35% 92%))`

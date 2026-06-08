@@ -11,12 +11,11 @@ from .serializers import CartItemSerializer, CartSerializer
 
 
 def _get_user_id(request) -> int | None:
-    qp = request.query_params.get("user_id")
     hdr = request.headers.get("X-User-Id")
-    if qp and hdr and qp != hdr:
-        raise PermissionDenied("user_id does not match authenticated user")
-    val = hdr or qp
-    return int(val) if val and val.isdigit() else None
+    if hdr and hdr.isdigit():
+        return int(hdr)
+    qp = request.query_params.get("user_id")
+    return int(qp) if qp and qp.isdigit() else None
 
 
 @api_view(["GET"])

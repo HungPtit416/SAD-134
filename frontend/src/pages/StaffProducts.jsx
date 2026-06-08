@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import ProductImage from '../components/ProductImage'
 import { useToast } from '../components/Toast'
 import {
   getStaffEmail,
@@ -23,6 +24,7 @@ function emptyDraft() {
     category_id: '',
     is_active: true,
     stock_quantity: '',
+    image_url: '',
   }
 }
 
@@ -94,6 +96,7 @@ export default function StaffProducts() {
       category_id: p.category?.id != null ? String(p.category.id) : '',
       is_active: !!p.is_active,
       stock_quantity: st?.quantity != null ? String(st.quantity) : '',
+      image_url: p.image || '',
     })
   }
 
@@ -107,6 +110,7 @@ export default function StaffProducts() {
       currency: String(draft.currency || 'VND').trim().toUpperCase(),
       category_id: draft.category_id ? Number(draft.category_id) : null,
       is_active: !!draft.is_active,
+      image: String(draft.image_url || '').trim() || null,
     }
     if (!payload.sku || !payload.name || !payload.price) {
       toast.push({ type: 'error', title: 'Thiếu dữ liệu', message: 'SKU, tên và giá là bắt buộc.' })
@@ -116,8 +120,10 @@ export default function StaffProducts() {
     try {
       let productId = editingId
       if (editingId) {
-        await staffUpdateProduct(editingId, payload)
+        const updated = await staffUpdateProduct(editingId, payload)
+        productId = updated?.id ?? editingId
         toast.push({ title: 'Updated', message: 'Đã cập nhật sản phẩm.' })
+        setDraft((d) => ({ ...d, image_url: updated?.image || '' }))
       } else {
         const created = await staffCreateProduct(payload)
         productId = created?.id
@@ -134,7 +140,7 @@ export default function StaffProducts() {
         await staffUpsertStock(productId, { quantity: qty })
       }
       await reload()
-      startCreate()
+      if (!editingId) startCreate()
     } catch (err) {
       toast.push({ type: 'error', title: 'Save failed', message: err?.message || '' })
     }
@@ -176,6 +182,7 @@ export default function StaffProducts() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', fontSize: 13, opacity: 0.9 }}>
+                  <th style={{ padding: '10px 12px' }}>Ảnh</th>
                   <th style={{ padding: '10px 12px' }}>SKU</th>
                   <th style={{ padding: '10px 12px' }}>Tên</th>
                   <th style={{ padding: '10px 12px' }}>Category</th>
@@ -188,6 +195,9 @@ export default function StaffProducts() {
               <tbody>
                 {products.map((p) => (
                   <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <td style={{ padding: '10px 12px' }}>
+                      <ProductImage name={p.name} sku={p.sku} url={p.image} size={48} />
+                    </td>
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>{p.sku}</td>
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ fontWeight: 600 }}>{p.name}</div>
@@ -213,7 +223,7 @@ export default function StaffProducts() {
                 ))}
                 {!products.length && !loading ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: 14, opacity: 0.7 }}>
+                    <td colSpan={8} style={{ padding: 14, opacity: 0.7 }}>
                       No products.
                     </td>
                   </tr>
@@ -247,6 +257,15 @@ export default function StaffProducts() {
                 rows={4}
                 value={draft.description}
                 onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              />
+            </label>
+            <label className="field">
+              <div className="fieldLabel">Image URL</div>
+              <input
+                className="input"
+                value={draft.image_url}
+                onChange={(e) => setDraft((d) => ({ ...d, image_url: e.target.value }))}
+                placeholder="https://example.com/image.jpg"
               />
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.7fr', gap: 10 }}>

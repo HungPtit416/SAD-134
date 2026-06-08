@@ -14,12 +14,24 @@ export default function Cart() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [recs, setRecs] = useState([])
+  const [productsMap, setProductsMap] = useState({})
 
   async function load() {
     setLoading(true)
     setError('')
     try {
-      setCart(await getCart(userId))
+      const c = await getCart(userId)
+      setCart(c)
+      if (c && c.items) {
+        const pMap = {}
+        for (const it of c.items) {
+          try {
+            const p = await import('../api').then(m => m.getProduct(it.product_id))
+            pMap[it.product_id] = p
+          } catch { }
+        }
+        setProductsMap(pMap)
+      }
     } catch (e) {
       setError(e?.message || 'Failed to load cart')
     } finally {
@@ -111,7 +123,7 @@ export default function Cart() {
           {items.map((it) => (
             <div key={it.id} className="lineItem">
               <div className="lineLeft">
-                <div className="lineTitle">Product #{it.product_id}</div>
+                <div className="lineTitle">{productsMap[it.product_id]?.name || `Product #${it.product_id}`}</div>
                 <div className="lineMeta">
                   <span className="chip">Unit: {money(it.unit_price, it.currency)}</span>
                 </div>
@@ -157,7 +169,7 @@ export default function Cart() {
               {recs.slice(0, 6).map((p) => (
                 <Link key={p.id} to={`/products/${p.id}`} className="miniRecCard">
                   <div className="miniRecImg">
-                    <ProductImage name={p.name} sku={p.sku} size={96} />
+                    <ProductImage name={p.name} sku={p.sku} url={p.image} size={96} />
                   </div>
                   <div className="miniRecInfo">
                     <div className="miniRecName">{p.name}</div>

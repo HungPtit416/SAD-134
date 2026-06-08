@@ -26,6 +26,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "sku",
             "name",
             "description",
+            "image",
             "price",
             "currency",
             "category",

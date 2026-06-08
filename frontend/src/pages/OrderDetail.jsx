@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getOrder, getProduct, orderPayNow } from '../api'
+import { cancelOrder, getOrder, getProduct, orderPayNow } from '../api'
 import { useUserId } from '../components/Layout'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
+
+const ORDER_TIMEOUT_MS = 5 * 60 * 1000
+
+function isOrderExpired(order) {
+  if (!order?.created_at) return false
+  return Date.now() - new Date(order.created_at).getTime() > ORDER_TIMEOUT_MS
+}
+
+function isOrderCancelled(order) {
+  return order?.status === 'CANCELLED' || order?.payment_status === 'CANCELLED'
+}
+
+function isPendingPayment(order) {
+  return order?.payment_status === 'PENDING' && order?.status === 'PENDING_PAYMENT'
+}
 
 export default function OrderDetail() {
   const userId = useUserId()
@@ -50,7 +65,9 @@ export default function OrderDetail() {
     return items.reduce((sum, it) => sum + Number(it.unit_price ?? 0) * Number(it.quantity ?? 0), 0)
   }, [items])
 
-  const needsPayment = order?.payment_status && order.payment_status !== 'CAPTURED'
+  const cancelled = isOrderCancelled(order)
+  const canPay = isPendingPayment(order) && !isOrderExpired(order)
+  const canCancel = canPay
 
   async function onPayNow() {
     setLoading(true)
@@ -62,8 +79,28 @@ export default function OrderDetail() {
       toast.push({ title: 'Redirecting to VNPAY', message: 'Please complete payment to update order status.' })
       window.location.href = url
     } catch (e) {
+      if (e?.detail?.includes?.('timeout') || e?.message?.includes?.('timeout')) {
+        await load()
+      }
       setError(e?.message || 'Pay now failed')
       toast.push({ type: 'error', title: 'Pay now failed', message: e?.message || '' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function onCancel() {
+    if (!confirm('Hủy đơn hàng này? Hành động không thể hoàn tác.')) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await cancelOrder(userId, id)
+      setOrder(res?.order || null)
+      toast.push({ title: 'Đã hủy đơn', message: 'Đơn hàng đã được hủy.' })
+    } catch (e) {
+      setError(e?.message || 'Cancel failed')
+      toast.push({ type: 'error', title: 'Hủy đơn thất bại', message: e?.message || '' })
+      await load()
     } finally {
       setLoading(false)
     }
@@ -92,15 +129,21 @@ export default function OrderDetail() {
           </div>
           <div className="detailDesc">Created: {order?.created_at || '-'}</div>
           {order?.tracking_code ? <div className="detailDesc">Tracking: {order.tracking_code}</div> : null}
+          {cancelled ? <div className="detailDesc mutedSmall">Đơn hàng đã bị hủy.</div> : null}
         </div>
         <div className="detailAside">
           <div className="sum compact">
             <div className="sumLabel">Total</div>
             <div className="sumValue">{money(order?.total_amount ?? total, order?.currency || 'USD')}</div>
           </div>
-          {needsPayment ? (
+          {canPay ? (
             <button className="btnPrimary" type="button" onClick={onPayNow} disabled={loading}>
               Pay now (VNPAY)
+            </button>
+          ) : null}
+          {canCancel ? (
+            <button className="btn" type="button" onClick={onCancel} disabled={loading}>
+              Cancel order
             </button>
           ) : null}
           <Link to="/orders" className="btn">
@@ -145,4 +188,3 @@ export default function OrderDetail() {
     </div>
   )
 }
-

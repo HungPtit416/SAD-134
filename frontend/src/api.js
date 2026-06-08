@@ -414,6 +414,14 @@ export async function orderPayNow(userId, orderId) {
   })
 }
 
+export async function cancelOrder(userId, orderId) {
+  return await httpJson(`${ORDER_API}/api/orders/${encodeURIComponent(orderId)}/cancel/?user_id=${encodeURIComponent(userId)}`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({}),
+  })
+}
+
 export async function listOrders(userId) {
   const data = await httpJson(`${ORDER_API}/api/orders/?user_id=${encodeURIComponent(userId)}`, {
     headers: authHeaders(),

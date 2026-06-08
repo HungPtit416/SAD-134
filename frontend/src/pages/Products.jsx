@@ -157,7 +157,7 @@ export default function Products() {
                 {recs.slice(0, 6).map((p) => (
                   <Link key={p.id} to={`/products/${p.id}`} className="miniRecCard">
                     <div className="miniRecImg">
-                      <ProductImage name={p.name} sku={p.sku} size={96} />
+                      <ProductImage name={p.name} sku={p.sku} url={p.image} size={96} />
                     </div>
                     <div className="miniRecInfo">
                       <div className="miniRecName">{p.name}</div>
@@ -182,7 +182,7 @@ export default function Products() {
               <div className="cardBody">
                 <div className="productCardVertical">
                   <div className="productMedia">
-                    <ProductImage name={p.name} sku={p.sku} size={220} />
+                    <ProductImage name={p.name} sku={p.sku} url={p.image} size={220} />
                   </div>
                   <div className="productInfo">
                     <Link to={`/products/${p.id}`} className="productName vertical">

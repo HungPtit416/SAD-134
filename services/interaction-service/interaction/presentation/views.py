@@ -6,9 +6,20 @@ from ..infrastructure.models import Event
 from .serializers import CreateEventSerializer, EventSerializer
 
 
+def _get_user_id(request) -> int | None:
+    hdr = request.headers.get("X-User-Id")
+    if hdr and hdr.isdigit():
+        return int(hdr)
+    qp = request.query_params.get("user_id")
+    return int(qp) if qp and qp.isdigit() else None
+
 @api_view(["POST"])
 def create_event(request):
-    ser = CreateEventSerializer(data=request.data)
+    user_id = _get_user_id(request)
+    data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+    data["user_id"] = user_id
+    
+    ser = CreateEventSerializer(data=data)
     ser.is_valid(raise_exception=True)
     data = ser.validated_data
 

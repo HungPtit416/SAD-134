@@ -9,11 +9,19 @@ from ..application.sequence_predictor import predict_next_action
 from .serializers import ChatRequestSerializer, RecommendationRequestSerializer
 
 
+def _get_user_id(request) -> int | None:
+    hdr = request.headers.get("X-User-Id")
+    if hdr and hdr.isdigit():
+        return int(hdr)
+    qp = request.query_params.get("user_id")
+    return int(qp) if qp and qp.isdigit() else None
+
 @api_view(["GET"])
 def recommendations(request):
+    user_id = _get_user_id(request)
     ser = RecommendationRequestSerializer(
         data={
-            "user_id": request.query_params.get("user_id"),
+            "user_id": user_id,
             "limit": request.query_params.get("limit"),
             "query": request.query_params.get("query"),
             "seed_product_ids": request.query_params.get("seed_product_ids"),
@@ -76,7 +84,12 @@ def index(request):
 
 @api_view(["POST"])
 def chat(request):
-    ser = ChatRequestSerializer(data=request.data)
+    user_id = _get_user_id(request)
+    # create a mutable copy to replace user_id
+    data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+    data["user_id"] = user_id
+    
+    ser = ChatRequestSerializer(data=data)
     ser.is_valid(raise_exception=True)
     user_id = ser.validated_data["user_id"]
     session_id = (ser.validated_data.get("session_id") or "").strip() or "default"

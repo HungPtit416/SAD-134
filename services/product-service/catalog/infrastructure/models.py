@@ -15,7 +15,8 @@ class Category(models.Model):
 class Product(models.Model):
     sku = models.CharField(max_length=64, unique=True)
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
+    description = models.TextField(blank=True, null=True)
+    image = models.URLField(max_length=1024, blank=True, null=True)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default="USD")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products", null=True, blank=True)

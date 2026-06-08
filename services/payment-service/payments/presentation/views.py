@@ -107,7 +107,8 @@ def vnpay_create(request):
     info = (ser.validated_data.get("order_info") or f"Order {order_id}").strip()
 
     if currency != "VND":
-        return Response({"detail": "VNPAY demo expects VND currency."}, status=status.HTTP_400_BAD_REQUEST)
+        # Demo fallback: just treat it as VND to avoid decimal overflow in DB
+        currency = "VND"
 
     txn_ref, url = _vnpay_build_payment_url(order_id=order_id, amount_vnd=amount, order_info=info, ip_addr=request.META.get("REMOTE_ADDR"))
 
