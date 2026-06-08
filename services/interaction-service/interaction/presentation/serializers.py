@@ -19,7 +19,7 @@ class EventSerializer(serializers.ModelSerializer):
 
 
 class CreateEventSerializer(serializers.Serializer):
-    user_id = serializers.CharField(max_length=64)
+    user_id = serializers.IntegerField(min_value=1)
     session_id = serializers.CharField(max_length=64, required=False, allow_null=True, allow_blank=True)
     event_type = serializers.CharField(max_length=64)
     product_id = serializers.IntegerField(required=False, allow_null=True)

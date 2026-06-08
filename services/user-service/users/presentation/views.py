@@ -3,8 +3,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from ..infrastructure.models import Customer
-from .serializers import CustomerSerializer
+from ..infrastructure.models import User
+from .serializers import UserSerializer
 
 
 @api_view(["GET"])
@@ -12,9 +12,9 @@ def ping(_request):
     return Response({"status": "ok"})
 
 
-class CustomerViewSet(viewsets.ModelViewSet):
-    queryset = Customer.objects.all()
-    serializer_class = CustomerSerializer
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
 
 @api_view(["GET"])
@@ -35,11 +35,11 @@ def verify_jwt(request):
     user, _token = user_auth
     username = getattr(user, "username", None)
     resp = Response({"ok": True, "user": username}, status=status.HTTP_200_OK)
-    if username:
-        resp["X-User-Id"] = str(username)
+    if user:
+        resp["X-User-Id"] = str(user.id)
     # Role hints for the API Gateway to forward downstream.
     # We reuse Django's built-in flags (no custom user model needed).
     is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
-    resp["X-User-Role"] = "staff" if is_staff else "customer"
+    resp["X-User-Role"] = "staff" if is_staff else "user"
     return resp
 

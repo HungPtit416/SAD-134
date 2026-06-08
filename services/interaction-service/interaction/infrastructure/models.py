@@ -6,7 +6,7 @@ class Event(models.Model):
     A single user interaction event emitted by frontend/backend.
     """
 
-    user_id = models.CharField(max_length=64, db_index=True)
+    user_id = models.PositiveBigIntegerField(db_index=True)
     session_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
     event_type = models.CharField(max_length=64, db_index=True)
     product_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)

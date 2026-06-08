@@ -4,10 +4,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .auth import register
 from .staff_auth import StaffTokenObtainPairView
-from .views import CustomerViewSet, ping, verify_jwt
+from .views import UserViewSet, ping, verify_jwt
 
 router = DefaultRouter()
-router.register(r"customers", CustomerViewSet, basename="customer")
+router.register(r"users", UserViewSet, basename="user")
 
 urlpatterns = [
     path("ping/", ping),

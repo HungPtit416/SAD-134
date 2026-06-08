@@ -10,12 +10,13 @@ from ..infrastructure.models import Cart, CartItem
 from .serializers import CartItemSerializer, CartSerializer
 
 
-def _get_user_id(request) -> str | None:
+def _get_user_id(request) -> int | None:
     qp = request.query_params.get("user_id")
     hdr = request.headers.get("X-User-Id")
     if qp and hdr and qp != hdr:
         raise PermissionDenied("user_id does not match authenticated user")
-    return hdr or qp
+    val = hdr or qp
+    return int(val) if val and val.isdigit() else None
 
 
 @api_view(["GET"])

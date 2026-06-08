@@ -12,16 +12,15 @@ class Role(models.Model):
         return self.name
 
 
-class Customer(models.Model):
-    user_id = models.CharField(max_length=64, unique=True)
+class User(models.Model):
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=200, blank=True)
-    role = models.ForeignKey(Role, on_delete=models.PROTECT, null=True, blank=True, related_name="customers")
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, null=True, blank=True, related_name="users")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.user_id} ({self.email})"
+        return f"User {self.id} ({self.email})"
 

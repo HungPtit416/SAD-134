@@ -10,14 +10,14 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 
 class ChargeRequestSerializer(serializers.Serializer):
-    user_id = serializers.CharField(max_length=64)
+    user_id = serializers.IntegerField(min_value=1)
     order_id = serializers.IntegerField(min_value=1)
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     currency = serializers.CharField(max_length=3, required=False, allow_blank=True)
 
 
 class VnpayCreateRequestSerializer(serializers.Serializer):
-    user_id = serializers.CharField(max_length=64)
+    user_id = serializers.IntegerField(min_value=1)
     order_id = serializers.IntegerField(min_value=1)
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     currency = serializers.CharField(max_length=3, required=False, allow_blank=True)

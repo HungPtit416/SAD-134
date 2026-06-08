@@ -16,12 +16,13 @@ from ..infrastructure.models import Order, OrderItem
 from .serializers import CheckoutStartSerializer, OrderSerializer
 
 
-def _get_user_id(request) -> str | None:
+def _get_user_id(request) -> int | None:
     qp = request.query_params.get("user_id")
     hdr = request.headers.get("X-User-Id")
     if qp and hdr and qp != hdr:
         raise PermissionDenied("user_id does not match authenticated user")
-    return hdr or qp
+    val = hdr or qp
+    return int(val) if val and val.isdigit() else None
 
 
 def _cancel_if_expired(order: Order) -> bool:
@@ -99,10 +100,9 @@ def order_pay(request, order_id: int):
             currency=str(order.currency),
             order_info=f"ElecShop order #{order.id}",
         )
-        order.payment_id = int(pay.get("payment_id")) if pay.get("payment_id") is not None else None
         order.payment_status = "PENDING"
         order.status = "PENDING_PAYMENT"
-        order.save(update_fields=["payment_id", "payment_status", "status"])
+        order.save(update_fields=["payment_status", "status"])
         return Response({"order": OrderSerializer(order).data, "payment_url": pay.get("payment_url")}, status=status.HTTP_201_CREATED)
     except Exception as e:  # noqa: BLE001
         return Response({"detail": f"Payment start failed: {e}", "order": OrderSerializer(order).data}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -180,8 +180,7 @@ def checkout_start(request):
             currency=str(order.currency),
             order_info=f"ElecShop order #{order.id}",
         )
-        order.payment_id = int(pay.get("payment_id")) if pay.get("payment_id") is not None else None
-        order.save(update_fields=["payment_id"])
+        # Payment status already PENDING
         return Response({"order": OrderSerializer(order).data, "payment_url": pay.get("payment_url")}, status=status.HTTP_201_CREATED)
     except Exception as e:  # noqa: BLE001
         order.payment_status = "FAILED"
@@ -237,10 +236,9 @@ def checkout_confirm(request):
     try:
         ship = create_shipment(user_id=user_id, order_id=int(order.id), address=str(order.shipping_address or ""))
         order.shipping_status = str(ship.get("status") or "CREATED")
-        order.shipment_id = int(ship.get("id")) if ship.get("id") is not None else None
         order.tracking_code = str(ship.get("tracking_code") or "")[:64]
         order.status = "SHIPPING_CREATED"
-        order.save(update_fields=["shipping_status", "shipment_id", "tracking_code", "status"])
+        order.save(update_fields=["shipping_status", "tracking_code", "status"])
     except Exception as e:  # noqa: BLE001
         order.shipping_status = "FAILED"
         order.save(update_fields=["shipping_status"])

@@ -1,9 +1,9 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User as AuthUser
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..infrastructure.models import Customer, Role
+from ..infrastructure.models import Role, User as AppUser
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -20,15 +20,23 @@ def register(request):
     password = ser.validated_data["password"]
     full_name = ser.validated_data.get("full_name", "")
 
-    if User.objects.filter(username=email).exists():
+    if AuthUser.objects.filter(username=email).exists():
         return Response({"detail": "Email already registered"}, status=status.HTTP_409_CONFLICT)
 
-    user = User.objects.create_user(username=email, email=email, password=password, first_name=full_name)
+    user = AuthUser.objects.create_user(username=email, email=email, password=password, first_name=full_name)
     # Create business-profile record for downstream services
-    role, _ = Role.objects.get_or_create(name="customer", defaults={"description": "Default customer role"})
-    Customer.objects.get_or_create(
-        user_id=email,
-        defaults={"email": email, "full_name": full_name, "role": role},
-    )
+    role, _ = Role.objects.get_or_create(name="user", defaults={"description": "Default user role"})
+    try:
+        app_user = AppUser.objects.get(email=email)
+        app_user.full_name = full_name
+        app_user.role = role
+        app_user.save()
+    except AppUser.DoesNotExist:
+        AppUser.objects.create(
+            id=user.id,
+            email=email,
+            full_name=full_name,
+            role=role,
+        )
     return Response({"id": user.id, "email": user.email}, status=status.HTTP_201_CREATED)
 

@@ -1,1 +1,1 @@
-from .infrastructure.models import Customer
+from .infrastructure.models import User

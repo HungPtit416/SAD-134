@@ -4,7 +4,7 @@ from django.db import models
 class Payment(models.Model):
    
 
-    user_id = models.CharField(max_length=64)
+    user_id = models.PositiveBigIntegerField(db_index=True)
     order_id = models.PositiveBigIntegerField(db_index=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default="USD")

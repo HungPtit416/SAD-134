@@ -2,13 +2,11 @@ from django.db import models
 
 
 class Order(models.Model):
-    user_id = models.CharField(max_length=64)
+    user_id = models.PositiveBigIntegerField(db_index=True)
     status = models.CharField(max_length=32, default="CREATED")
     payment_status = models.CharField(max_length=32, default="PENDING")
-    payment_id = models.PositiveBigIntegerField(null=True, blank=True)
     inventory_status = models.CharField(max_length=32, default="PENDING")
     shipping_status = models.CharField(max_length=32, default="PENDING")
-    shipment_id = models.PositiveBigIntegerField(null=True, blank=True)
     tracking_code = models.CharField(max_length=64, blank=True, default="")
     shipping_address = models.JSONField(default=dict, blank=True)
     shipping_method = models.CharField(max_length=32, blank=True, default="")

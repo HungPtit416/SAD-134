@@ -10,7 +10,7 @@ class ShipmentSerializer(serializers.ModelSerializer):
 
 
 class CreateShipmentRequestSerializer(serializers.Serializer):
-    user_id = serializers.CharField(max_length=64)
+    user_id = serializers.IntegerField(min_value=1)
     order_id = serializers.IntegerField(min_value=1)
     address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 

@@ -1,2 +1,2 @@
-from .presentation.serializers import CustomerSerializer
+from .presentation.serializers import UserSerializer
 

@@ -2,7 +2,7 @@ from django.db import models
 
 
 class Shipment(models.Model):
-    user_id = models.CharField(max_length=64)
+    user_id = models.PositiveBigIntegerField(db_index=True)
     order_id = models.PositiveBigIntegerField(db_index=True)
     status = models.CharField(max_length=32, default="CREATED")  # CREATED -> IN_TRANSIT -> DELIVERED
     carrier = models.CharField(max_length=32, default="mock")

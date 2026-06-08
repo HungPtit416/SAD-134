@@ -7,7 +7,7 @@ except Exception:  # noqa: BLE001
 
 
 class ChatTurn(models.Model):
-    user_id = models.CharField(max_length=64, db_index=True)
+    user_id = models.PositiveBigIntegerField(db_index=True)
     session_id = models.CharField(max_length=64, db_index=True, default="default")
     message = models.TextField()
     answer = models.TextField()
@@ -51,7 +51,7 @@ class ProductEmbedding(models.Model):
 
 
 class UserEmbedding(models.Model):
-    user_id = models.CharField(max_length=64, unique=True, db_index=True)
+    user_id = models.PositiveBigIntegerField(unique=True)
     embedding = VectorField(dimensions=64) if VectorField is not None else models.JSONField(default=list)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -72,7 +72,7 @@ class GnnUserEmbedding(models.Model):
     User embedding trained from a graph model (e.g., LightGCN).
     """
 
-    user_id = models.CharField(max_length=64, unique=True, db_index=True)
+    user_id = models.PositiveBigIntegerField(unique=True)
     embedding = VectorField(dimensions=64) if VectorField is not None else models.JSONField(default=list)
     updated_at = models.DateTimeField(auto_now=True)
 

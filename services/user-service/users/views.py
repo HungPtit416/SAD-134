@@ -1,1 +1,1 @@
-from .presentation.views import CustomerViewSet, ping
+from .presentation.views import UserViewSet, ping

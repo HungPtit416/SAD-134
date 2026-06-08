@@ -77,7 +77,7 @@ function _friendlyHttpMessage(status, detail) {
 }
 
 async function httpJson(url, options) {
-  const authKind = options?.__authKind || 'customer'
+  const authKind = options?.__authKind || 'user'
   if (options && typeof options === 'object' && '__authKind' in options) {
     try {
       // Remove non-fetch init key

@@ -2,7 +2,7 @@ from django.db import models
 
 
 class Cart(models.Model):
-    user_id = models.CharField(max_length=64, unique=True)
+    user_id = models.PositiveBigIntegerField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
