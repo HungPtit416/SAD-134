@@ -1,4 +1,10 @@
+"""
+Chat orchestration: retrieval + optional heuristics + Gemini completion (see `chat_heuristics` docstring).
+"""
+
 from __future__ import annotations
+
+import re
 
 from .chat_types import ChatResult
 from .chat_heuristics import (
@@ -10,14 +16,17 @@ from .chat_heuristics import (
     _is_cable_product,
     _is_case_product,
     _is_charger_product,
-    _is_gaming_laptop_name,
+    _is_gaming_laptop_product,
     _is_negative_short_reply,
     _load_recent_chat_turns,
+    _maybe_answer_catalog_list_all_vi,
     _name_key,
     _parse_budget_vnd,
     _prefer_non_gaming_laptop,
     _product_matches_domain,
+    _finalize_want_accessories,
     _should_use_heuristic_first,
+    _wants_catalog_list_all_intent,
     _summarize_history,
     _wants_gaming_laptop,
 )
@@ -161,22 +170,66 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
     def _augment_candidates(msg: str, base: list[dict]) -> list[dict]:
         """
         Ensure the context always contains category-relevant candidates when the user asks explicitly
-        (e.g., laptop/audio/phone/accessories), even if personalized recommenders return unrelated items.
+        (e.g., laptop/audio/phone/tablet/watch/accessories), even if personalized recommenders return unrelated items.
         """
 
         s = (msg or "").lower()
+        aug_lines = [ln.strip() for ln in (msg or "").splitlines() if ln.strip()]
+        s_focus = aug_lines[0].lower() if aug_lines else s
         want_laptop = "laptop" in s or "macbook" in s
-        want_audio = any(k in s for k in ["tai nghe", "earbud", "airpods", "headphone", "chống ồn", "noise cancelling", "anc"])
+        want_audio = any(
+            k in s
+            for k in [
+                "tai nghe",
+                "earbud",
+                "airpods",
+                "headphone",
+                "chống ồn",
+                "noise cancelling",
+                "anc",
+                "loa",
+                "speaker",
+                "jbl",
+                "sony",
+                "bose",
+                "sennheiser",
+            ]
+        )
         want_phone = any(
             k in s
             for k in [
                 "điện thoại",
                 "dien thoai",
                 "smartphone",
-                "phone",
+                "iphone",
                 "samsung",
                 "galaxy",
-                "iphone",
+                "galaxy s",
+                "galaxy a",
+                "galaxy z",
+                "xiaomi",
+                "redmi",
+                "oppo",
+                "realme",
+                "oneplus",
+                "pixel",
+            ]
+        )
+        # Avoid treating "galaxy tab" as phone (tablet branch wins first).
+        if want_phone and any(k in s for k in ["galaxy tab", "ipad", "tablet", "máy tính bảng", "may tinh bang", "xiaomi pad"]):
+            want_phone = False
+        want_tablet = any(k in s for k in ["tablet", "ipad", "máy tính bảng", "may tinh bang", "galaxy tab", "xiaomi pad"])
+        want_watch = any(
+            k in s
+            for k in [
+                "smartwatch",
+                "apple watch",
+                "galaxy watch",
+                "garmin",
+                "forerunner",
+                "fitbit",
+                "đồng hồ thông minh",
+                "dong ho thong minh",
             ]
         )
         want_accessories = any(
@@ -196,14 +249,29 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                 "charger",
                 "củ sạc",
                 "ốp",
-                "op",
                 "ốp lưng",
-                "case",
+                "op lung",
                 "bao da",
+                "hub",
+                "bàn phím",
+                "ban phim",
+                "chuột",
+                "chuot",
+                "mouse",
+                "keyboard",
             ]
+        ) or bool(re.search(r"\bcase\b", s))
+
+        want_accessories = _finalize_want_accessories(
+            s,
+            want_laptop=want_laptop,
+            want_phone=want_phone,
+            want_tablet=want_tablet,
+            want_watch=want_watch,
+            want_accessories=want_accessories,
         )
 
-        if not (want_laptop or want_audio or want_phone or want_accessories):
+        if not (want_laptop or want_audio or want_phone or want_tablet or want_watch or want_accessories):
             return base
 
         budget_min, budget_max = _parse_budget_vnd(msg)
@@ -215,25 +283,61 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
         cand: list[Product] = allp
         if want_laptop:
             cand = [p for p in cand if "laptop" in _cat(p) or "macbook" in _name_key(p)]
-            if _wants_gaming_laptop(s):
-                cand = [p for p in cand if _is_gaming_laptop_name(p.name)]
-            if _prefer_non_gaming_laptop(s):
-                cand = [p for p in cand if not _is_gaming_laptop_name(p.name)]
+            if _wants_gaming_laptop(s_focus):
+                cand = [p for p in cand if _is_gaming_laptop_product(p)]
+            if _prefer_non_gaming_laptop(s_focus):
+                cand = [p for p in cand if not _is_gaming_laptop_product(p)]
+            if re.search(r"\basus\b", s, flags=re.I):
+                tmp = [p for p in cand if "asus" in _name_key(p)]
+                cand = tmp if tmp else cand
+            elif re.search(r"\bdell\b", s, flags=re.I):
+                tmp = [p for p in cand if "dell" in _name_key(p)]
+                cand = tmp if tmp else cand
+            elif re.search(r"\bhp\b", s, flags=re.I):
+                tmp = [p for p in cand if re.search(r"\bhp\b", _name_key(p), flags=re.I)]
+                cand = tmp if tmp else cand
+            elif re.search(r"\blenovo\b", s, flags=re.I):
+                tmp = [p for p in cand if "lenovo" in _name_key(p)]
+                cand = tmp if tmp else cand
+            elif re.search(r"\bmsi\b", s, flags=re.I):
+                tmp = [p for p in cand if "msi" in _name_key(p)]
+                cand = tmp if tmp else cand
+            elif re.search(r"\bacer\b", s, flags=re.I):
+                tmp = [p for p in cand if "acer" in _name_key(p)]
+                cand = tmp if tmp else cand
         elif want_audio:
             cand = [p for p in cand if "audio" in _cat(p)]
         elif want_phone:
             cand = [p for p in cand if ("smartphone" in _cat(p) or "smartphones" in _cat(p) or "phone" in _cat(p))]
             # Brand hint
-            if "samsung" in s or "galaxy" in s:
-                cand = [p for p in cand if ("samsung" in _name_key(p) or "galaxy" in _name_key(p))]
+            if "samsung" in s or ("galaxy" in s and "tab" not in s):
+                cand = [p for p in cand if ("samsung" in _name_key(p) or "galaxy" in _name_key(p)) and "tab" not in _name_key(p)]
             elif "iphone" in s:
                 cand = [p for p in cand if "iphone" in _name_key(p)]
+            elif "xiaomi" in s or "redmi" in s:
+                cand = [p for p in cand if ("xiaomi" in _name_key(p) or "redmi" in _name_key(p))]
+            elif "oppo" in s:
+                cand = [p for p in cand if "oppo" in _name_key(p)]
+            elif "pixel" in s or "google" in s:
+                cand = [p for p in cand if ("pixel" in _name_key(p) or "google" in _name_key(p))]
+            elif "oneplus" in s:
+                cand = [p for p in cand if "oneplus" in _name_key(p)]
+            elif "realme" in s:
+                cand = [p for p in cand if "realme" in _name_key(p)]
+        elif want_tablet:
+            cand = [p for p in cand if "tablet" in _cat(p) or "ipad" in _name_key(p) or "galaxy tab" in _name_key(p) or "pad" in _name_key(p)]
+        elif want_watch:
+            cand = [p for p in cand if "smartwatch" in _cat(p) or "watch" in _name_key(p) or "garmin" in _name_key(p)]
         elif want_accessories:
             cand = [p for p in cand if "accessories" in _cat(p)]
             # If user is specific, filter within accessories.
             want_cable = any(k in s for k in ["cáp", "cap", "cable", "usb-c", "type-c", "type c"])
             want_charger = any(k in s for k in ["sạc", "sac", "charger", "củ sạc"])
-            want_case = any(k in s for k in ["ốp", "op", "ốp lưng", "case", "bao da"])
+            want_case = (
+                any(k in s for k in ["ốp", "ốp lưng", "bao da"])
+                or bool(re.search(r"\bop\s+lung\b", s, flags=re.I))
+                or bool(re.search(r"\bcase\b", s))
+            )
             if want_case and not want_cable and not want_charger:
                 cand = [p for p in cand if _is_case_product(p)]
             elif want_cable and not want_case and not want_charger:
@@ -254,10 +358,25 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                 tmp.append(p)
             cand = tmp
 
-        # Add up to 3 items not already in base.
+        want_list_all = _wants_catalog_list_all_intent(msg)
+        explicit_cat = want_laptop or want_audio or want_phone or want_tablet or want_watch or want_accessories
+        gaming = want_laptop and _wants_gaming_laptop(s_focus)
+        list_all_mode = explicit_cat and want_list_all
+        if gaming and want_list_all:
+            max_extra, scan_n = 80, 500
+        elif gaming:
+            max_extra, scan_n = 10, 25
+        elif list_all_mode:
+            max_extra, scan_n = 80, 500
+        elif explicit_cat:
+            max_extra, scan_n = 8, 30
+        else:
+            max_extra, scan_n = 3, 25
+
         have = {int(x.get("id")) for x in base if x.get("id") is not None}
         extra: list[dict] = []
-        for p in cand[:10]:
+        scan_slice = cand if list_all_mode else cand[:scan_n]
+        for p in scan_slice:
             if int(p.id) in have:
                 continue
             extra.append(
@@ -272,7 +391,7 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                 }
             )
             have.add(int(p.id))
-            if len(extra) >= 3:
+            if len(extra) >= max_extra:
                 break
 
         if not extra:
@@ -294,6 +413,16 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
             return extra + base2
         if want_audio:
             base2 = [it for it in base if ("audio" in _base_cat_text(it) or "airpods" in str(it.get("name") or "").lower())]
+            return extra + base2
+        if want_tablet:
+            base2 = [
+                it
+                for it in base
+                if ("tablet" in _base_cat_text(it) or "ipad" in str(it.get("name") or "").lower() or "tab" in str(it.get("name") or "").lower())
+            ]
+            return extra + base2
+        if want_watch:
+            base2 = [it for it in base if ("smartwatch" in _base_cat_text(it) or "watch" in str(it.get("name") or "").lower())]
             return extra + base2
         if want_accessories:
             base2 = [it for it in base if ("accessories" in _base_cat_text(it) or "phụ kiện" in _base_cat_text(it))]
@@ -320,7 +449,9 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
         except Exception:  # noqa: BLE001
             picked.append(p)
     # Use recent conversation to keep topic continuity (e.g., user says "Samsung" then later only "dưới 30 triệu").
-    picked = _augment_candidates(convo_text, picked)
+    picked = _augment_candidates(f"{msg}\n{convo_text}", picked)
+
+    catalog_list_answer = _maybe_answer_catalog_list_all_vi(f"{msg}\n{convo_text}", focus_message=msg)
 
     retrieved = []
     try:
@@ -418,7 +549,8 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
         "Tuyệt đối không bịa thông tin (giá, cấu hình, tồn kho) nếu không thấy trong ngữ cảnh. "
         "Nếu ngữ cảnh chưa đủ để trả lời chắc chắn, hãy hỏi 1-2 câu hỏi làm rõ. "
         "Tránh lặp lại cùng một câu hỏi nhiều lần; nếu người dùng trả lời 'có/ok/yes' sau khi bạn hỏi có muốn xem thêm gợi ý, hãy đưa thêm gợi ý ngay. "
-        "Khi đề xuất sản phẩm, hãy đưa 2-3 lựa chọn phù hợp nhất và kèm product_id."
+        "Khi đề xuất sản phẩm, ưu tiên các mục trong Candidate products; nếu người dùng yêu cầu liệt kê đầy đủ "
+        "thì liệt kê tất cả các mục đó (kèm product_id). Nếu không, đưa 2–4 lựa chọn phù hợp nhất."
     )
     # Keep prompt compact to reduce off-topic answers.
     user = (
@@ -427,10 +559,12 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
         f"User behavior:\n{history}\n\n"
         f"Graph evidence:\n{graph_ctx_display}\n\n"
         f"Retrieved chunks:\n{retrieved}\n\n"
-        f"Candidate products (use these first):\n{picked[:5]}\n"
+        f"Candidate products (use these first):\n{picked[:45]}\n"
     )
 
-    if force_heuristic or _should_use_heuristic_first(logic_text):
+    if catalog_list_answer is not None:
+        answer = catalog_list_answer
+    elif force_heuristic or _should_use_heuristic_first(logic_text):
         answer = _fallback_answer_vi(logic_text, history=history)
     else:
         try:
@@ -440,21 +574,24 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
             answer = _fallback_answer_vi(logic_text, history=history)
 
     # Guardrail: if the assistant suggests product_ids from the wrong domain, fall back to deterministic in-shop suggestions.
-    try:
-        ids = _extract_product_ids(answer)
-        if ids and domain:
-            wrong = 0
-            for pid in ids[:5]:
-                try:
-                    p = get_product(int(pid))
-                except Exception:  # noqa: BLE001
-                    continue
-                if not _product_matches_domain(p, domain):
-                    wrong += 1
-            if wrong:
-                answer = _fallback_answer_vi(convo_text, history=history)
-    except Exception:  # noqa: BLE001
-        pass
+    # Skip when we already answered from full-catalog heuristics: `domain` may still reflect an older turn (e.g. laptop)
+    # while the deterministic list used the domain from the current question (e.g. smartphone).
+    if catalog_list_answer is None:
+        try:
+            ids = _extract_product_ids(answer)
+            if ids and domain:
+                wrong = 0
+                for pid in ids[:5]:
+                    try:
+                        p = get_product(int(pid))
+                    except Exception:  # noqa: BLE001
+                        continue
+                    if not _product_matches_domain(p, domain):
+                        wrong += 1
+                if wrong:
+                    answer = _fallback_answer_vi(convo_text, history=history)
+        except Exception:  # noqa: BLE001
+            pass
 
     # Persist the chat turn (best-effort; should not break the chat response).
     try:

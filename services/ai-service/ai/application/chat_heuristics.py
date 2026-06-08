@@ -1,3 +1,12 @@
+"""
+Heuristic helpers for ElecShop chat.
+
+The chat pipeline is hybrid: rules here narrow candidates, validate domains, and answer a few
+deterministic intents; the Gemini client still generates natural-language replies from the
+context bundle (RAG chunks + candidate products). Heuristics are not a replacement for the LLM;
+they reduce hallucination and keep catalog constraints consistent.
+"""
+
 from __future__ import annotations
 
 import re
@@ -5,6 +14,98 @@ import re
 from .interaction_gateway import list_events
 from .product_gateway import Product, get_product, list_products
 from ..infrastructure.models import ChatTurn
+
+# Shared across chat augment + fallback + deterministic "list entire category" answers.
+_CATALOG_LIST_ALL_KEYWORDS: tuple[str, ...] = (
+    "tất cả",
+    "tat ca",
+    "liệt kê",
+    "liet ke",
+    "đầy đủ",
+    "day du",
+    "toàn bộ",
+    "toan bo",
+    "những mẫu",
+    "nhung mau",
+    "các mẫu",
+    "cac mau",
+    "mẫu nào",
+    "mau nao",
+    "mấy loại",
+    "may loai",
+    "bao nhiêu mẫu",
+    "bao nhieu mau",
+    "full list",
+)
+
+
+def _normalize_user_text_for_match(text: str) -> str:
+    t = (text or "").lower().replace("\u00a0", " ").replace("\u2009", " ")
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _message_mentions_explicit_accessory_goods(s: str) -> bool:
+    """
+    True when the user clearly asks about accessories (cable, charger, case, hub, etc.).
+    Used to suppress false accessory intent from weak substring matches (e.g. "op" inside "laptop").
+    """
+
+    t = _normalize_user_text_for_match(s)
+    if not t:
+        return False
+    return bool(
+        re.search(
+            r"phụ\s*kiện|phu\s*kien|accessories|\bcáp\b|\bcap\b|\bcable\b|usb-?c|type-?c|"
+            r"\bsạc\b|\bsac\b|charger|củ\s*sạc|ốp|ốp\s+lưng|op\s+lung|bao\s+da|\bhub\b|"
+            r"chuột|chuot|ban\s+phim|bàn\s+phím|keyboard|mouse|\bcase\b",
+            t,
+            flags=re.I,
+        )
+    )
+
+
+def _finalize_want_accessories(
+    s: str,
+    *,
+    want_laptop: bool,
+    want_phone: bool,
+    want_tablet: bool,
+    want_watch: bool,
+    want_accessories: bool,
+) -> bool:
+    """
+    If the user is clearly asking about a device category, ignore accessory intent unless the
+    first line (current turn when convo is newest-first) mentions an actual accessory product.
+    Prevents: (1) "op" inside "laptop"; (2) older turns about accessories hijacking a laptop query.
+    """
+
+    if not want_accessories:
+        return False
+    if want_laptop or want_phone or want_tablet or want_watch:
+        raw_head = ((s or "").splitlines() or [""])[0]
+        head = _normalize_user_text_for_match(raw_head)
+        return _message_mentions_explicit_accessory_goods(head)
+    return True
+
+
+def _wants_catalog_list_all_intent(text: str) -> bool:
+    """True when the user is asking for a full in-category catalog listing (not just 2–4 picks)."""
+
+    t = _normalize_user_text_for_match(text)
+    if not t:
+        return False
+    if any(k in t for k in _CATALOG_LIST_ALL_KEYWORDS):
+        return True
+    # Typo / spacing tolerant: "tat ca", "tất  cả"
+    if re.search(r"t[aạ]t\s*c[aả]", t):
+        return True
+    # Common Vietnamese phrasing without the exact phrase "tất cả"
+    if re.search(r"những\s+.+?\s+nào\s+trong\s+cửa\s+hàng", t):
+        return True
+    if re.search(r"có\s+những\s+.+?\s+nào", t):
+        return True
+    return False
 
 
 def _keyword_score(query: str, text: str) -> float:
@@ -138,6 +239,12 @@ def _extract_product_ids(text: str) -> list[int]:
     return ids
 
 
+def _catalog_blob(p: Product) -> str:
+    """Lowercased category + name + SKU for robust keyword checks across domains."""
+
+    return f"{p.category_name or ''} {p.name or ''} {p.sku or ''}".lower()
+
+
 def _infer_domain(convo_text: str) -> str | None:
     """
     Infer the user's current product domain.
@@ -147,11 +254,52 @@ def _infer_domain(convo_text: str) -> str | None:
     s = (convo_text or "").lower()
     if any(k in s for k in ["laptop", "macbook", "notebook"]):
         return "laptop"
-    if any(k in s for k in ["tai nghe", "earbud", "earbuds", "airpods", "headphone", "headphones", "loa", "speaker", "anc"]):
+    if any(
+        k in s
+        for k in [
+            "tai nghe",
+            "earbud",
+            "earbuds",
+            "airpods",
+            "headphone",
+            "headphones",
+            "loa",
+            "loa bluetooth",
+            "speaker",
+            "anc",
+            "jbl",
+            "sony wh",
+            "bose",
+            "sennheiser",
+        ]
+    ):
         return "audio"
-    if any(k in s for k in ["tablet", "ipad", "máy tính bảng", "may tinh bang"]):
+    if any(
+        k in s
+        for k in [
+            "tablet",
+            "ipad",
+            "máy tính bảng",
+            "may tinh bang",
+            "galaxy tab",
+            "xiaomi pad",
+            "may bang",
+        ]
+    ):
         return "tablet"
-    if any(k in s for k in ["smartwatch", "đồng hồ", "dong ho", "watch", "garmin"]):
+    if any(
+        k in s
+        for k in [
+            "smartwatch",
+            "đồng hồ thông minh",
+            "dong ho thong minh",
+            "apple watch",
+            "galaxy watch",
+            "garmin",
+            "forerunner",
+            "fitbit",
+        ]
+    ) or (("đồng hồ" in s or "dong ho" in s) and " tab " not in s and "tablet" not in s):
         return "smartwatch"
     if any(
         k in s
@@ -164,6 +312,7 @@ def _infer_domain(convo_text: str) -> str | None:
             "samsung",
             "galaxy",
             "xiaomi",
+            "redmi",
             "oppo",
             "realme",
             "oneplus",
@@ -171,7 +320,29 @@ def _infer_domain(convo_text: str) -> str | None:
         ]
     ):
         return "smartphone"
-    if any(k in s for k in ["phụ kiện", "phu kien", "accessories", "cáp", "cap", "cable", "sạc", "sac", "charger", "ốp", "op", "case"]):
+    if any(
+        k in s
+        for k in [
+            "phụ kiện",
+            "phu kien",
+            "accessories",
+            "cáp",
+            "cap",
+            "cable",
+            "sạc",
+            "sac",
+            "charger",
+            "ốp",
+            "op lung",
+            "hub",
+            "bàn phím",
+            "ban phim",
+            "chuột",
+            "chuot",
+            "mouse",
+            "keyboard",
+        ]
+    ) or bool(re.search(r"\bcase\b", s)):
         return "accessories"
     return None
 
@@ -180,19 +351,90 @@ def _product_matches_domain(p: Product, domain: str | None) -> bool:
     if not domain:
         return True
     cat = (p.category_name or "").lower()
-    name = (p.name or "").lower()
+    blob = _catalog_blob(p)
     if domain == "laptop":
-        return "laptop" in cat or "macbook" in name
+        return "laptop" in cat or "macbook" in blob
     if domain == "audio":
-        return "audio" in cat or any(k in name for k in ["airpods", "headphone", "earbud", "speaker", "loa"])
+        if "audio" in cat:
+            return True
+        return any(
+            k in blob
+            for k in (
+                "airpods",
+                "headphone",
+                "headphones",
+                "earbud",
+                "earbuds",
+                "speaker",
+                "soundlink",
+                "jbl",
+                "sony wh",
+                "bose",
+                "sennheiser",
+                "momentum",
+                "loa",
+                "flip",
+            )
+        )
     if domain == "smartphone":
-        return "smartphone" in cat or "phone" in cat
+        if "tablet" in cat or "laptop" in cat or "watch" in cat or "smartwatch" in cat:
+            return False
+        if "smartphone" in cat or "phones" in cat:
+            return True
+        if "phone" in cat and "headphone" not in cat and "earphone" not in cat:
+            return True
+        return any(
+            k in blob
+            for k in (
+                "iphone",
+                "pixel ",
+                "galaxy a",
+                "galaxy s",
+                "galaxy z",
+                "xiaomi",
+                "redmi",
+                "oppo ",
+                "realme",
+                "oneplus",
+            )
+        )
     if domain == "tablet":
-        return "tablet" in cat or "ipad" in name
+        if "tablet" in cat:
+            return True
+        return any(k in blob for k in ("ipad", "galaxy tab", "xiaomi pad"))
     if domain == "smartwatch":
-        return "smartwatch" in cat or "watch" in name or "garmin" in name
+        if "smartwatch" in cat:
+            return True
+        return any(
+            k in blob
+            for k in (
+                "apple watch",
+                "galaxy watch",
+                "garmin",
+                "forerunner",
+                "watch se",
+                "watch ultra",
+                "fitbit",
+            )
+        )
     if domain == "accessories":
-        return "accessories" in cat or "phụ kiện" in cat
+        if "accessories" in cat or "accessory" in cat or "phụ kiện" in cat:
+            return True
+        return any(
+            k in blob
+            for k in (
+                "cable",
+                "charger",
+                " hub",
+                "case",
+                "keyboard",
+                "mouse",
+                "power bank",
+                "powercore",
+                "ốp",
+                "adapter",
+            )
+        )
     return True
 
 
@@ -228,21 +470,51 @@ def _resolve_compare_pair_ids(message: str, first_id: int, products: list[Produc
     return [first_id]
 
 
-def _is_gaming_laptop_name(name: str) -> bool:
-    n = (name or "").lower()
-    return any(
+def _is_gaming_laptop_name(name: str, sku: str | None = None, description: str | None = None) -> bool:
+    """
+    Detect gaming SKUs from name, SKU, and description (catalog often says "gaming" only in description).
+    """
+
+    n = f"{name or ''} {sku or ''} {(description or '')}".lower()
+    if any(
         x in n
         for x in (
             "gaming",
             "tuf",
             "strix",
+            "rog",
+            "zephyrus",
+            "flow",
+            "scar",
             "legion",
+            "loq",
             "rtx",
             "gtx",
             "predator",
             "nitro",
+            "alienware",
+            "omen",
+            "victus",
+            "crosshair",
+            "pulse",
+            "katana",
+            "stealth",
+            "vector",
+            "gf63",
+            "gf65",
+            "gf75",
+            "ideapad gaming",
         )
-    )
+    ):
+        return True
+    # Dell G15 / MSI GF65 style model codes in name or SKU
+    if re.search(r"\bg\d{2}\b", n):
+        return True
+    return False
+
+
+def _is_gaming_laptop_product(p: Product) -> bool:
+    return _is_gaming_laptop_name(p.name, p.sku, p.description)
 
 
 def _name_key(p: Product) -> str:
@@ -265,6 +537,162 @@ def _is_charger_product(p: Product) -> bool:
 def _is_case_product(p: Product) -> bool:
     k = _name_key(p)
     return "case" in k or "ốp" in k or "bao da" in k
+
+
+def _infer_domain_for_catalog_list_query(text: str) -> str | None:
+    """
+    Infer domain for "list entire catalog" answers. Prefer the first non-empty line (current user
+    message is prepended first in chat_answer) so a long history mentioning laptop does not make
+    `_infer_domain` latch to laptop when the user is clearly asking about smartphones now.
+    """
+
+    s = (text or "").strip()
+    if not s:
+        return None
+    lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
+    for ln in lines[:3]:
+        d = _infer_domain(ln)
+        if d:
+            return d
+    return _infer_domain(s)
+
+
+def _maybe_answer_catalog_list_all_vi(text: str, *, focus_message: str | None = None) -> str | None:
+    """
+    When the user asks to list every item in a category (e.g. all smartphones), return a complete
+    catalog-backed answer so the LLM cannot compress the list to a few picks.
+    """
+
+    raw = (text or "").strip()
+    s = _normalize_user_text_for_match(raw)
+    if not _wants_catalog_list_all_intent(raw):
+        return None
+    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    s0 = _normalize_user_text_for_match(lines[0]) if lines else s
+    fm = (focus_message or "").strip()
+    dom = _infer_domain_for_catalog_list_query(fm) if fm else None
+    if not dom:
+        dom = _infer_domain_for_catalog_list_query(raw)
+    if not dom:
+        return None
+    try:
+        allp = list_products()
+    except Exception:  # noqa: BLE001
+        return None
+    if not allp:
+        return None
+
+    budget_min, budget_max = _parse_budget_vnd(raw)
+
+    def cat(p: Product) -> str:
+        return (p.category_name or "").lower()
+
+    def price_vnd(p: Product) -> int | None:
+        try:
+            return int(float(p.price)) if p.price is not None else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    out = [p for p in allp if _product_matches_domain(p, dom)]
+
+    if dom == "laptop":
+        pre_laptop = list(out)
+        narrowed = [p for p in out if "laptop" in cat(p) or "macbook" in _name_key(p)]
+        out = narrowed if narrowed else pre_laptop
+        # Use the current question line only — joining older turns can wrongly re-inject "gaming"
+        # into a follow-up like "có tất cả những laptop nào trong cửa hàng".
+        s_laptop_focus = s0
+        if _wants_gaming_laptop(s_laptop_focus):
+            out = [p for p in out if _is_gaming_laptop_product(p)]
+        elif _prefer_non_gaming_laptop(s_laptop_focus):
+            out = [p for p in out if not _is_gaming_laptop_product(p)]
+    elif dom == "audio":
+        narrowed = [p for p in out if "audio" in cat(p)]
+        out = narrowed if narrowed else out
+    elif dom == "smartphone":
+        narrowed = [
+            p
+            for p in out
+            if (
+                "smartphone" in cat(p)
+                or "smartphones" in cat(p)
+                or "phone" in cat(p)
+                or "điện thoại" in cat(p)
+                or "dien thoai" in cat(p)
+                or "mobile" in cat(p)
+            )
+        ]
+        base_phones = narrowed if narrowed else out
+        out = base_phones
+        # Brand hints: use the first line only so older turns (e.g. "Samsung") do not narrow a "list all" question.
+        if "samsung" in s0 or ("galaxy" in s0 and "tab" not in s0):
+            out = [p for p in out if ("samsung" in _name_key(p) or "galaxy" in _name_key(p)) and "tab" not in _name_key(p)]
+        elif "iphone" in s0:
+            out = [p for p in out if "iphone" in _name_key(p)]
+        elif "xiaomi" in s0 or "redmi" in s0:
+            out = [p for p in out if ("xiaomi" in _name_key(p) or "redmi" in _name_key(p))]
+        elif "oppo" in s0:
+            out = [p for p in out if "oppo" in _name_key(p)]
+        elif "pixel" in s0 or "google" in s0:
+            out = [p for p in out if ("pixel" in _name_key(p) or "google" in _name_key(p))]
+        elif "oneplus" in s0:
+            out = [p for p in out if "oneplus" in _name_key(p)]
+        elif "realme" in s0:
+            out = [p for p in out if "realme" in _name_key(p)]
+    elif dom == "tablet":
+        narrowed = [p for p in out if "tablet" in cat(p) or "ipad" in _name_key(p) or "galaxy tab" in _name_key(p) or "pad" in _name_key(p)]
+        out = narrowed if narrowed else out
+    elif dom == "smartwatch":
+        narrowed = [p for p in out if "smartwatch" in cat(p) or "watch" in _name_key(p) or "garmin" in _name_key(p)]
+        out = narrowed if narrowed else out
+    elif dom == "accessories":
+        narrowed = [p for p in out if "accessories" in cat(p)]
+        out = narrowed if narrowed else out
+        want_cable = any(k in s0 for k in ["cáp", "cap", "cable", "usb-c", "type-c", "type c"])
+        want_charger = any(k in s0 for k in ["sạc", "sac", "charger", "củ sạc"])
+        want_case = (
+            any(k in s0 for k in ["ốp", "ốp lưng", "bao da"])
+            or bool(re.search(r"\bop\s+lung\b", s0, flags=re.I))
+            or bool(re.search(r"\bcase\b", s0))
+        )
+        if want_case and not want_cable and not want_charger:
+            out = [p for p in out if _is_case_product(p)]
+        elif want_cable and not want_case and not want_charger:
+            out = [p for p in out if _is_cable_product(p)]
+        elif want_charger and not want_case and not want_cable:
+            out = [p for p in out if _is_charger_product(p)]
+
+    if budget_min is not None or budget_max is not None:
+        tmp: list[Product] = []
+        for p in out:
+            pv = price_vnd(p)
+            if pv is None:
+                continue
+            if budget_min is not None and pv < budget_min:
+                continue
+            if budget_max is not None and pv > budget_max:
+                continue
+            tmp.append(p)
+        out = tmp
+
+    if not out:
+        return None
+
+    out.sort(key=lambda p: int(p.id))
+    label = {
+        "laptop": "laptop",
+        "smartphone": "smartphone",
+        "audio": "tai nghe / âm thanh",
+        "tablet": "máy tính bảng",
+        "smartwatch": "đồng hồ thông minh",
+        "accessories": "phụ kiện",
+    }.get(dom, dom)
+    reply_lines = [f"Dưới đây là **toàn bộ** các mẫu **{label}** trong catalog ElecShop ({len(out)} mẫu):"]
+    for i, p in enumerate(out, 1):
+        reply_lines.append(f"{i}. **{p.name}** (product_id: {p.id}) — {p.price} {p.currency or 'VND'}".strip())
+    reply_lines.append("")
+    reply_lines.append("Bạn muốn mình gợi ý thêm theo ngân sách hoặc thương hiệu không?")
+    return "\n".join(reply_lines)
 
 
 def _answer_compare_vi(message: str, products: list[Product] | None = None) -> str | None:
@@ -415,6 +843,8 @@ def _should_use_heuristic_first(message: str) -> bool:
     """
 
     msg = (message or "").strip()
+    if _wants_catalog_list_all_intent(msg):
+        return False
     s = msg.lower()
     try:
         prods = list_products()
@@ -429,8 +859,26 @@ def _should_use_heuristic_first(message: str) -> bool:
     want_charger = (
         any(k in s for k in ["sạc", "charger", "fast charger", "33w", "65w", "củ sạc"]) and not want_cable
     )
-    want_case = any(k in s for k in ["ốp", "ốp lưng", "case", "bao da", "op lung"])
+    want_case = (
+        any(k in s for k in ["ốp", "ốp lưng", "bao da"])
+        or bool(re.search(r"\bop\s+lung\b", s, flags=re.I))
+        or bool(re.search(r"\bcase\b", s))
+    )
     want_accessories = any(k in s for k in ["phụ kiện", "accessory", "phu kien"]) or want_charger or want_cable or want_case
+    want_laptop = "laptop" in s or "macbook" in s
+    want_phone = any(k in s for k in ["điện thoại", "dien thoai", "smartphone", " phone "]) or any(
+        k in s for k in ["samsung", "galaxy", "iphone", "xiaomi", "redmi", "oppo", "realme", "oneplus", "pixel"]
+    )
+    want_tablet = any(k in s for k in ["tablet", "ipad", "máy tính bảng", "may tinh bang"])
+    want_watch = any(k in s for k in ["smartwatch", "đồng hồ", "dong ho", "watch", "garmin"])
+    want_accessories = _finalize_want_accessories(
+        s,
+        want_laptop=want_laptop,
+        want_phone=want_phone,
+        want_tablet=want_tablet,
+        want_watch=want_watch,
+        want_accessories=want_accessories,
+    )
 
     want_similar = any(k in s for k in ["tương tự", "similar", "giống"])
 
@@ -458,6 +906,10 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
     if avail:
         return avail
 
+    full_catalog = _maybe_answer_catalog_list_all_vi(msg, focus_message=msg)
+    if full_catalog:
+        return full_catalog
+
     # Basic intent heuristics
     s = msg.lower()
     # Treat brand-only messages (e.g. "hãng samsung") as phone intent too.
@@ -465,7 +917,8 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
     if not want_phone and any(k in s for k in ["samsung", "galaxy", "iphone", "xiaomi", "redmi", "oppo", "realme", "oneplus", "pixel"]):
         want_phone = True
     want_laptop = "laptop" in s or "macbook" in s
-    want_gaming_laptop = want_laptop and _wants_gaming_laptop(s)
+    s_head = (msg.splitlines()[0] or msg).lower().strip() if msg else s
+    want_gaming_laptop = want_laptop and _wants_gaming_laptop(s_head)
     want_big_ram = any(k in s for k in ["ram to", "ram lớn", "ram lon", "ram cao", "nhiều ram", "nhieu ram"])
     want_big_ssd = any(k in s for k in ["ssd", "ổ cứng", "o cung", "dung lượng", "dung luong"])
     want_battery = any(k in s for k in ["pin trâu", "pin trau", "pin tốt", "pin tot", "pin lâu", "pin lau", "battery"])
@@ -475,8 +928,20 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
     want_cable = any(k in s for k in ["cáp", "cable", "usb-c", "type c", "type-c", "type‑c"])
     # If message includes "cáp sạc" we should prioritize cable over wall charger.
     want_charger = (any(k in s for k in ["sạc", "charger", "fast charger", "33w", "65w", "củ sạc"]) and not want_cable)
-    want_case = any(k in s for k in ["ốp", "case", "bao da"])
+    want_case = (
+        any(k in s for k in ["ốp", "ốp lưng", "bao da"])
+        or bool(re.search(r"\bop\s+lung\b", s, flags=re.I))
+        or bool(re.search(r"\bcase\b", s))
+    )
     want_accessories = any(k in s for k in ["phụ kiện", "accessory", "phu kien"]) or want_charger or want_cable or want_case
+    want_accessories = _finalize_want_accessories(
+        s,
+        want_laptop=want_laptop,
+        want_phone=want_phone,
+        want_tablet=want_tablet,
+        want_watch=want_watch,
+        want_accessories=want_accessories,
+    )
 
     want_similar = any(k in s for k in ["tương tự", "similar", "giống"]) and history is not None
 
@@ -553,9 +1018,27 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
     elif want_laptop:
         cand = [p for p in cand if "laptop" in cat(p)]
         if want_gaming_laptop:
-            cand = [p for p in cand if _is_gaming_laptop_name(p.name)]
-        if _prefer_non_gaming_laptop(s):
-            cand = [p for p in cand if not _is_gaming_laptop_name(p.name)]
+            cand = [p for p in cand if _is_gaming_laptop_product(p)]
+        if _prefer_non_gaming_laptop(s_head):
+            cand = [p for p in cand if not _is_gaming_laptop_product(p)]
+        if re.search(r"\basus\b", s, flags=re.I):
+            tmp = [p for p in cand if "asus" in _name_key(p)]
+            cand = tmp if tmp else cand
+        elif re.search(r"\bdell\b", s, flags=re.I):
+            tmp = [p for p in cand if "dell" in _name_key(p)]
+            cand = tmp if tmp else cand
+        elif re.search(r"\bhp\b", s, flags=re.I):
+            tmp = [p for p in cand if re.search(r"\bhp\b", _name_key(p), flags=re.I)]
+            cand = tmp if tmp else cand
+        elif re.search(r"\blenovo\b", s, flags=re.I):
+            tmp = [p for p in cand if "lenovo" in _name_key(p)]
+            cand = tmp if tmp else cand
+        elif re.search(r"\bmsi\b", s, flags=re.I):
+            tmp = [p for p in cand if "msi" in _name_key(p)]
+            cand = tmp if tmp else cand
+        elif re.search(r"\bacer\b", s, flags=re.I):
+            tmp = [p for p in cand if "acer" in _name_key(p)]
+            cand = tmp if tmp else cand
     elif want_earbuds:
         cand = [p for p in cand if "audio" in cat(p)]
 
@@ -585,7 +1068,14 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
                 cand2.append(p)
         cand = cand2
 
-    cand = cand[:5]
+    want_list_all = _wants_catalog_list_all_intent(msg)
+    if want_list_all:
+        cap = 80
+    elif want_laptop and want_gaming_laptop:
+        cap = 12
+    else:
+        cap = 5
+    cand = cand[:cap]
 
     if cand:
         lines = ["Mình gợi ý vài sản phẩm trong shop phù hợp nhu cầu của bạn:"]
