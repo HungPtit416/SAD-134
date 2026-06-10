@@ -7,6 +7,12 @@ from django.conf import settings
 from .interaction_gateway import list_events
 from .product_gateway import Product, get_product, list_products
 from .graph_gateway import recommend_from_graph, user_product_edge_count
+from .rating_utils import (
+    query_mentions_rating,
+    query_wants_high_rating,
+    query_wants_low_rating,
+    rating_quality_score,
+)
 from .sequence_predictor import predict_next_action
 from ..infrastructure.models import GnnProductEmbedding, GnnUserEmbedding, ProductEmbedding, UserEmbedding
 
@@ -28,7 +34,11 @@ def _recommendations_from_query(user_id: str, query: str | None, limit: int) -> 
     interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
 
     # Lightweight Vietnamese/English keyword normalization.
-    if any(k in q for k in ["laptop", "notebook", "macbook"]):
+    if any(k in q for k in ["sách", "sach", "book", "novel", "truyện", "truyen", "tác giả", "tac gia", "author", "fiction", "harry", "sapiens", "đắc nhân", "dac nhan"]):
+        keywords = ["book", "sách", "sach", "novel", "fiction", "non-fiction", "children", "author", "harry", "sapiens", "dune", "orwell"]
+    elif any(k in q for k in ["thời trang", "thoi trang", "fashion", "quần áo", "quan ao", "giày", "giay", "váy", "vay", "túi", "tui", "áo", "ao", "sneaker", "jeans", "dress", "nike", "uniqlo", "zara"]):
+        keywords = ["fashion", "clothing", "shoes", "bags", "dress", "jeans", "sneaker", "tote", "uniqlo", "nike", "zara", "levi", "coach"]
+    elif any(k in q for k in ["laptop", "notebook", "macbook"]):
         keywords = ["laptop", "macbook", "notebook"]
     elif any(k in q for k in ["tai nghe", "headphone", "earbuds"]):
         keywords = ["tai nghe", "headphone", "earbud", "earbuds", "airpods"]
@@ -49,12 +59,57 @@ def _recommendations_from_query(user_id: str, query: str | None, limit: int) -> 
     for p in products:
         if p.id in interacted:
             continue
-        hay = f"{p.name or ''} {p.category_name or ''}".lower()
+        hay = f"{p.name or ''} {p.category_name or ''} {p.extra_blob or ''}".lower()
         if any(k in hay for k in keywords):
             matched.append(Recommendation(product_id=p.id, score=100.0, reason="query-match"))
         if len(matched) >= limit:
             break
     return matched
+
+
+def _recommendations_from_ratings(user_id: str, query: str | None, limit: int) -> list[Recommendation]:
+    q = (query or "").strip().lower()
+    if not query_mentions_rating(q):
+        return []
+
+    events = list_events(user_id, limit=200)
+    interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
+
+    try:
+        products = list_products()
+    except Exception:  # noqa: BLE001
+        return []
+
+    want_low = query_wants_low_rating(q)
+    want_high = query_wants_high_rating(q) or not want_low
+
+    pool = [p for p in products if p.id not in interacted and rating_quality_score(p) > 0]
+    if not pool:
+        return []
+
+    pool.sort(key=lambda p: rating_quality_score(p), reverse=want_high)
+    reason = "high-rating" if want_high else "low-rating"
+    return [
+        Recommendation(product_id=p.id, score=float(rating_quality_score(p)), reason=reason)
+        for p in pool[:limit]
+    ]
+
+
+def _apply_rating_score_boost(items: list[Recommendation], limit: int) -> list[Recommendation]:
+    if not items:
+        return items
+    try:
+        prod_map = {p.id: p for p in list_products()}
+    except Exception:  # noqa: BLE001
+        return items[:limit]
+
+    boosted: list[Recommendation] = []
+    for r in items:
+        p = prod_map.get(r.product_id)
+        bonus = rating_quality_score(p) * 0.2 if p else 0.0
+        boosted.append(Recommendation(product_id=r.product_id, score=float(r.score) + bonus, reason=r.reason))
+    boosted.sort(key=lambda x: (-float(x.score), x.product_id))
+    return boosted[:limit]
 
 
 def _dedupe_recommendations(items: list[Recommendation], limit: int) -> list[Recommendation]:
@@ -113,6 +168,7 @@ def _recommendations_from_event_categories(user_id: str, limit: int) -> list[Rec
         if p.category_id is not None and p.category_id in cat_scores:
             score += cat_scores[p.category_id]
             reason = "same-category"
+        score += rating_quality_score(p) * 0.25
         scored.append(Recommendation(product_id=p.id, score=score, reason=reason))
 
     scored.sort(key=lambda x: x.score, reverse=True)
@@ -239,6 +295,7 @@ def recommend_products(
     min_edges = max(0, int(getattr(settings, "GRAPH_MIN_PRODUCT_EDGES_FOR_BLEND", 2)))
 
     q_recs = _recommendations_from_query(user_id, query, limit=limit)
+    rating_recs = _recommendations_from_ratings(user_id, query, limit=limit)
     seed_recs = _recommendations_from_seed_products(user_id, seed_product_ids, limit=limit)
     graph = recommend_from_graph(user_id, limit=limit, seed_product_ids=seed_product_ids or None)
     emb = _recommendations_from_embeddings(user_id, limit=limit)
@@ -260,7 +317,7 @@ def recommend_products(
                 items = _dedupe_recommendations(items + seed_recs, limit)
         else:
             items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
-        return _rerank_by_query(items, query, limit)
+        return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
 
     if graph and emb:
         has_cooc = any(g.reason == "graph-cooccurrence" for g in graph)
@@ -273,7 +330,7 @@ def recommend_products(
                     items = _dedupe_recommendations(items + seed_recs, limit)
             else:
                 items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
-            return _rerank_by_query(items, query, limit)
+            return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
 
         edges = user_product_edge_count(user_id)
         if edges >= min_edges:
@@ -281,11 +338,11 @@ def recommend_products(
             items = _dedupe_recommendations(emb + graph_recs, limit)
             items = _rerank_by_next_action(items, pred.action, limit)
             items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
-            return _rerank_by_query(items, query, limit)
+            return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
 
         items = _rerank_by_next_action(emb, pred.action, limit)
         items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
-        return _rerank_by_query(items, query, limit)
+        return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
 
     if graph:
         items = [Recommendation(product_id=g.product_id, score=g.score, reason=g.reason) for g in graph]
@@ -296,7 +353,7 @@ def recommend_products(
                 items = _dedupe_recommendations(items + seed_recs, limit)
         else:
             items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
-        return _rerank_by_query(items, query, limit)
+        return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
 
     if emb:
         items = _rerank_by_next_action(emb, pred.action, limit)
@@ -306,13 +363,15 @@ def recommend_products(
                 items = _dedupe_recommendations(items + seed_recs, limit)
         else:
             items = _dedupe_recommendations(q_recs + seed_recs + behavior_cat_recs + items, limit)
-        return _rerank_by_query(items, query, limit)
+        return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
 
     events = list_events(user_id, limit=200)
     # If the user has no behavior yet (cold start) and the UI didn't provide query/seeds,
     # return empty to avoid showing "random popular" items.
     meaningful = [e for e in events if (e.product_id is not None) or (e.query or "").strip()]
     if not meaningful and not (query or "").strip() and not seed_product_ids:
+        if rating_recs:
+            return _finalize_recommendations(rating_recs, query, limit, [])
         return []
     interacted: set[int] = {e.product_id for e in events if e.product_id is not None}
 
@@ -343,6 +402,7 @@ def recommend_products(
         if p.category_id is not None and p.category_id in cat_scores:
             score += cat_scores[p.category_id]
             reason = "same-category"
+        score += rating_quality_score(p) * 0.25
         scored.append(Recommendation(product_id=p.id, score=score, reason=reason))
 
     scored.sort(key=lambda x: x.score, reverse=True)
@@ -353,7 +413,29 @@ def recommend_products(
             items = _dedupe_recommendations(items + seed_recs, limit)
     else:
         items = _dedupe_recommendations(q_recs + seed_recs + items, limit)
-    return _rerank_by_query(items, query, limit)
+    return _finalize_recommendations(_rerank_by_query(items, query, limit), query, limit, rating_recs)
+
+
+def _finalize_recommendations(
+    items: list[Recommendation],
+    query: str | None,
+    limit: int,
+    rating_recs: list[Recommendation],
+) -> list[Recommendation]:
+    if rating_recs:
+        items = _dedupe_recommendations(rating_recs + items, limit)
+    items = _apply_rating_score_boost(items, limit)
+    q = (query or "").strip().lower()
+    if query_mentions_rating(q):
+        items = sorted(
+            items,
+            key=lambda r: (
+                0 if r.reason in {"high-rating", "low-rating"} else 1,
+                -float(r.score),
+                r.product_id,
+            ),
+        )
+    return items[:limit]
 
 
 def _rerank_by_query(items: list[Recommendation], query: str | None, limit: int) -> list[Recommendation]:
@@ -366,9 +448,10 @@ def _rerank_by_query(items: list[Recommendation], query: str | None, limit: int)
     if not items or not q:
         return items[:limit]
 
-    # Keep "query-match" items first.
-    if any(r.reason == "query-match" for r in items):
-        out = sorted(items, key=lambda r: (0 if r.reason == "query-match" else 1))
+    # Keep explicit query/rating intent first.
+    if any(r.reason in {"query-match", "high-rating", "low-rating"} for r in items):
+        pri = {"query-match": 0, "high-rating": 1, "low-rating": 1}
+        out = sorted(items, key=lambda r: (pri.get(r.reason, 2), -float(r.score)))
         return out[:limit]
 
     try:
@@ -402,24 +485,28 @@ def _rerank_by_next_action(items: list[Recommendation], next_action: str | None,
     # Primary: intent-based priority by "reason" buckets.
     if next_action in {"purchase", "checkout", "add_to_cart"}:
         reason_pri = {
-            "graph-cooccurrence": 0,
+            "high-rating": 0,
+            "low-rating": 0,
+            "graph-cooccurrence": 1,
+            "behavior-embedding": 2,
+            "gnn-embedding": 2,
+            "graph-same-category": 3,
+            "same-category": 4,
+            "seed-category": 4,
+            "popular": 5,
+        }
+    else:
+        # discovery intent
+        reason_pri = {
+            "high-rating": 0,
             "behavior-embedding": 1,
             "gnn-embedding": 1,
             "graph-same-category": 2,
             "same-category": 3,
             "seed-category": 3,
-            "popular": 4,
-        }
-    else:
-        # discovery intent
-        reason_pri = {
-            "behavior-embedding": 0,
-            "gnn-embedding": 0,
-            "graph-same-category": 1,
-            "same-category": 2,
-            "seed-category": 2,
-            "graph-cooccurrence": 3,
-            "popular": 4,
+            "graph-cooccurrence": 4,
+            "low-rating": 4,
+            "popular": 5,
         }
 
     def key(r: Recommendation):
@@ -448,7 +535,40 @@ def hydrate_products(recs: list[Recommendation]) -> list[dict]:
                 "description": p.description,
                 "price": p.price,
                 "currency": p.currency,
+                "image": p.image,
+                "ratings": p.ratings,
+                "no_of_ratings": p.no_of_ratings,
+                "main_category": p.main_category,
                 "category": {"id": p.category_id, "name": p.category_name} if p.category_id or p.category_name else None,
+                "book": (
+                    {
+                        "author": p.book.author,
+                        "publisher": p.book.publisher,
+                        "isbn": p.book.isbn,
+                        "language": p.book.language,
+                    }
+                    if p.book
+                    else None
+                ),
+                "electronics": (
+                    {
+                        "brand": p.electronics.brand,
+                        "color": p.electronics.color,
+                        "warranty_months": p.electronics.warranty_months,
+                    }
+                    if p.electronics
+                    else None
+                ),
+                "fashion": (
+                    {
+                        "brand": p.fashion.brand,
+                        "size": p.fashion.size,
+                        "color": p.fashion.color,
+                        "gender": p.fashion.gender,
+                    }
+                    if p.fashion
+                    else None
+                ),
                 "rank": id_to_rank[p.id] + 1,
             }
         )

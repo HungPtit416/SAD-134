@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { addToCart, aiRecommendations, getStockByProducts, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import ProductImage from '../components/ProductImage'
+import ProductRating from '../components/ProductRating'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
 
@@ -119,6 +120,7 @@ export default function RecommendedForYou() {
                         <div className="priceBlock">
                           <div className="priceNow">{money(p.price, 'VND')}</div>
                         </div>
+                        <ProductRating rating={p.ratings} count={p.no_of_ratings} compact />
                         {p?.category?.name ? <div className="mutedSmall">{p.category.name}</div> : null}
                         {p.rank != null ? (
                           <div className="metaRow">

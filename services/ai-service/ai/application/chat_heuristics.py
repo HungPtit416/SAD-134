@@ -13,6 +13,15 @@ import re
 
 from .interaction_gateway import list_events
 from .product_gateway import Product, get_product, list_products
+from .rating_utils import (
+    format_rating_line,
+    product_rating_count,
+    product_rating_value,
+    query_mentions_rating,
+    query_wants_high_rating,
+    query_wants_low_rating,
+    rating_quality_score,
+)
 from ..infrastructure.models import ChatTurn
 
 # Shared across chat augment + fallback + deterministic "list entire category" answers.
@@ -240,18 +249,87 @@ def _extract_product_ids(text: str) -> list[int]:
 
 
 def _catalog_blob(p: Product) -> str:
-    """Lowercased category + name + SKU for robust keyword checks across domains."""
+    """Lowercased category + name + SKU + subtype attrs for robust keyword checks."""
 
-    return f"{p.category_name or ''} {p.name or ''} {p.sku or ''}".lower()
+    base = f"{p.main_category or ''} {p.category_name or ''} {p.name or ''} {p.sku or ''}"
+    if p.extra_blob:
+        return f"{base} {p.extra_blob}".lower()
+    return base.lower()
 
 
 def _infer_domain(convo_text: str) -> str | None:
     """
     Infer the user's current product domain.
-    Returns one of: laptop | audio | smartphone | tablet | smartwatch | accessories | None
+    Returns one of: book | fashion | laptop | audio | smartphone | tablet | smartwatch | accessories | None
     """
 
     s = (convo_text or "").lower()
+    if any(
+        k in s
+        for k in [
+            "sách",
+            "sach",
+            "book",
+            "novel",
+            "truyện",
+            "truyen",
+            "tác giả",
+            "tac gia",
+            "author",
+            "isbn",
+            "publisher",
+            "harry potter",
+            "sapiens",
+            "atomic habits",
+            "đắc nhân tâm",
+            "dac nhan tam",
+            "tiểu thuyết",
+            "tieu thuyet",
+            "văn học",
+            "van hoc",
+            "thiếu nhi",
+            "thieu nhi",
+            "isbn",
+            "nxb",
+            "nhà xuất bản",
+            "nha xuat ban",
+        ]
+    ):
+        return "book"
+    if any(
+        k in s
+        for k in [
+            "thời trang",
+            "thoi trang",
+            "fashion",
+            "quần áo",
+            "quan ao",
+            "giày",
+            "giay",
+            "sneaker",
+            "váy",
+            "vay",
+            "dress",
+            "jeans",
+            "túi xách",
+            "tui xach",
+            "tote bag",
+            "tote",
+            "áo thun",
+            "ao thun",
+            "uniqlo",
+            "zara",
+            "nike",
+            "levi",
+            "coach",
+            "clarks",
+            "size m",
+            "size l",
+            "cỡ ",
+            "co ",
+        ]
+    ):
+        return "fashion"
     if any(k in s for k in ["laptop", "macbook", "notebook"]):
         return "laptop"
     if any(
@@ -350,8 +428,33 @@ def _infer_domain(convo_text: str) -> str | None:
 def _product_matches_domain(p: Product, domain: str | None) -> bool:
     if not domain:
         return True
+    main = (p.main_category or "").upper()
     cat = (p.category_name or "").lower()
     blob = _catalog_blob(p)
+    if domain == "book":
+        if main == "BOOK":
+            return True
+        return any(k in blob for k in ("book", "sách", "sach", "author", "publisher", "fiction", "novel"))
+    if domain == "fashion":
+        if main == "FASHION":
+            return True
+        return any(
+            k in blob
+            for k in (
+                "fashion",
+                "clothing",
+                "shoes",
+                "dress",
+                "jeans",
+                "sneaker",
+                "tote",
+                "uniqlo",
+                "zara",
+                "nike",
+                "levi",
+                "coach",
+            )
+        )
     if domain == "laptop":
         return "laptop" in cat or "macbook" in blob
     if domain == "audio":
@@ -436,6 +539,137 @@ def _product_matches_domain(p: Product, domain: str | None) -> bool:
             )
         )
     return True
+
+
+def _book_blob(p: Product) -> str:
+    b = p.book
+    if not b:
+        return _catalog_blob(p)
+    return f"{_catalog_blob(p)} {b.author or ''} {b.publisher or ''} {b.language or ''} {b.isbn or ''}".lower()
+
+
+def _fashion_blob(p: Product) -> str:
+    f = p.fashion
+    if not f:
+        return _catalog_blob(p)
+    return f"{_catalog_blob(p)} {f.brand or ''} {f.size or ''} {f.color or ''} {f.gender or ''}".lower()
+
+
+def _format_catalog_line(p: Product, dom: str | None = None) -> str:
+    line = f"**{p.name}** (product_id: {p.id}) — {p.price} {p.currency or 'VND'}"
+    dom_key = (dom or p.main_category or "").lower()
+    if dom_key == "book" and p.book:
+        bits: list[str] = []
+        if p.book.author:
+            bits.append(f"tác giả {p.book.author}")
+        if p.book.language:
+            bits.append(p.book.language)
+        if p.category_name:
+            bits.append(p.category_name)
+        if bits:
+            line += f" ({'; '.join(bits)})"
+    elif dom_key == "fashion" and p.fashion:
+        bits = []
+        if p.fashion.brand:
+            bits.append(p.fashion.brand)
+        if p.fashion.size:
+            bits.append(f"size {p.fashion.size}")
+        if p.fashion.gender:
+            bits.append(p.fashion.gender)
+        if bits:
+            line += f" ({'; '.join(bits)})"
+    elif p.electronics and p.electronics.brand:
+        line += f" (hãng {p.electronics.brand})"
+    return line.strip()
+
+
+def _filter_books_by_query(products: list[Product], s: str, *, focus: str | None = None) -> list[Product]:
+    s0 = _normalize_user_text_for_match(focus or s)
+    cand = [p for p in products if _product_matches_domain(p, "book")]
+
+    def bcat(p: Product) -> str:
+        return (p.category_name or "").lower()
+
+    if any(k in s0 for k in ["phi hư cấu", "phi hu cau", "non-fiction", "non fiction", "kỹ năng", "ky nang", "lịch sử", "lich su", "sapiens"]):
+        narrowed = [p for p in cand if "non-fiction" in bcat(p) or "non fiction" in bcat(p)]
+        cand = narrowed if narrowed else cand
+    elif any(k in s0 for k in ["thiếu nhi", "thieu nhi", "children", "trẻ em", "tre em"]):
+        narrowed = [p for p in cand if "children" in bcat(p)]
+        cand = narrowed if narrowed else cand
+    elif any(k in s0 for k in ["tiểu thuyết", "tieu thuyet", "fiction", "truyện", "truyen", "novel", "dune"]):
+        narrowed = [p for p in cand if bcat(p) == "fiction" or bcat(p).endswith(" fiction")]
+        cand = narrowed if narrowed else cand
+
+    author_rules: list[tuple[tuple[str, ...], tuple[str, ...]]] = [
+        (("harry potter", "rowling"), ("harry", "rowling")),
+        (("herbert", "dune"), ("herbert", "dune")),
+        (("orwell", "1984"), ("orwell", "1984")),
+        (("harari", "sapiens"), ("harari", "sapiens")),
+        (("james clear", "atomic"), ("clear", "atomic")),
+        (("dale carnegie", "đắc nhân", "dac nhan"), ("carnegie", "dac nhan", "đắc nhân")),
+    ]
+    for triggers, keys in author_rules:
+        if any(t in s0 for t in triggers):
+            tmp = [p for p in cand if any(k in _book_blob(p) for k in keys)]
+            if tmp:
+                cand = tmp
+                break
+
+    if any(k in s0 for k in ["tiếng việt", "tieng viet", "vietnamese", "bản tiếng việt"]):
+        tmp = [p for p in cand if p.book and "viet" in (p.book.language or "").lower()]
+        cand = tmp if tmp else cand
+    elif any(k in s0 for k in ["tiếng anh", "tieng anh", "english"]):
+        tmp = [p for p in cand if p.book and "english" in (p.book.language or "").lower()]
+        cand = tmp if tmp else cand
+
+    return cand
+
+
+def _filter_fashion_by_query(products: list[Product], s: str, *, focus: str | None = None) -> list[Product]:
+    s0 = _normalize_user_text_for_match(focus or s)
+    cand = [p for p in products if _product_matches_domain(p, "fashion")]
+
+    def fcat(p: Product) -> str:
+        return (p.category_name or "").lower()
+
+    if any(k in s0 for k in ["giày", "giay", "sneaker", "sneakers", "loafer", "dép", "dep", "shoes"]):
+        narrowed = [p for p in cand if "shoe" in fcat(p) or any(k in _fashion_blob(p) for k in ("sneaker", "loafer", "shoe"))]
+        cand = narrowed if narrowed else cand
+    elif any(k in s0 for k in ["váy", "vay", "dress", "áo", "ao", "quần", "quan", "jeans", "t-shirt", "tee", "clothing"]):
+        narrowed = [p for p in cand if "clothing" in fcat(p) or any(k in _fashion_blob(p) for k in ("dress", "jeans", "t-shirt", "shirt"))]
+        cand = narrowed if narrowed else cand
+    elif any(k in s0 for k in ["túi", "tui", "bag", "tote"]):
+        narrowed = [p for p in cand if "bag" in fcat(p) or "tote" in _fashion_blob(p)]
+        cand = narrowed if narrowed else cand
+
+    for brand in ("nike", "uniqlo", "zara", "levi", "coach", "clarks"):
+        if brand in s0:
+            tmp = [p for p in cand if brand in _fashion_blob(p)]
+            cand = tmp if tmp else cand
+            break
+
+    if any(k in s0 for k in ["nam", "men", "đàn ông", "dan ong"]):
+        tmp = [p for p in cand if p.fashion and (p.fashion.gender or "").lower() in ("men", "man", "male", "nam")]
+        cand = tmp if tmp else cand
+    elif any(k in s0 for k in ["nữ", "nu", "women", "woman", "phụ nữ", "phu nu"]):
+        tmp = [p for p in cand if p.fashion and (p.fashion.gender or "").lower() in ("women", "woman", "female", "nữ", "nu")]
+        cand = tmp if tmp else cand
+
+    sm = re.search(r"(?:size|cỡ|co)\s*([mslx]|\d{2})", s0, flags=re.I)
+    if sm:
+        sz = sm.group(1).upper()
+        tmp = [p for p in cand if p.fashion and sz in (p.fashion.size or "").upper()]
+        cand = tmp if tmp else cand
+
+    return cand
+
+
+def _wants_book_intent(s: str) -> bool:
+    return _infer_domain(s) == "book"
+
+
+def _wants_fashion_intent(s: str) -> bool:
+    return _infer_domain(s) == "fashion"
 
 
 def _resolve_compare_pair_ids(message: str, first_id: int, products: list[Product]) -> list[int]:
@@ -661,6 +895,10 @@ def _maybe_answer_catalog_list_all_vi(text: str, *, focus_message: str | None = 
             out = [p for p in out if _is_cable_product(p)]
         elif want_charger and not want_case and not want_cable:
             out = [p for p in out if _is_charger_product(p)]
+    elif dom == "book":
+        out = _filter_books_by_query(out, raw, focus=s0)
+    elif dom == "fashion":
+        out = _filter_fashion_by_query(out, raw, focus=s0)
 
     if budget_min is not None or budget_max is not None:
         tmp: list[Product] = []
@@ -686,13 +924,156 @@ def _maybe_answer_catalog_list_all_vi(text: str, *, focus_message: str | None = 
         "tablet": "máy tính bảng",
         "smartwatch": "đồng hồ thông minh",
         "accessories": "phụ kiện",
+        "book": "sách",
+        "fashion": "thời trang",
     }.get(dom, dom)
     reply_lines = [f"Dưới đây là **toàn bộ** các mẫu **{label}** trong catalog ElecShop ({len(out)} mẫu):"]
     for i, p in enumerate(out, 1):
-        reply_lines.append(f"{i}. **{p.name}** (product_id: {p.id}) — {p.price} {p.currency or 'VND'}".strip())
+        reply_lines.append(f"{i}. {_format_catalog_line(p, dom)}")
     reply_lines.append("")
     reply_lines.append("Bạn muốn mình gợi ý thêm theo ngân sách hoặc thương hiệu không?")
     return "\n".join(reply_lines)
+
+
+def _filter_pool_by_category_hint(products: list[Product], message: str) -> list[Product]:
+    """Narrow to products whose category name appears in the user message."""
+
+    s = _normalize_user_text_for_match(message)
+    if not s:
+        return products
+    matched: list[Product] = []
+    for p in products:
+        cn = (p.category_name or "").lower().strip()
+        if cn and cn in s:
+            matched.append(p)
+    if matched:
+        return matched
+    # Slug-style hints: smartphone, laptop, fiction, shoes, ...
+    for p in products:
+        cn = (p.category_name or "").lower()
+        if not cn:
+            continue
+        tokens = [t for t in re.split(r"[^a-z0-9]+", cn) if len(t) >= 3]
+        if any(t in s for t in tokens):
+            matched.append(p)
+    return matched if matched else products
+
+
+def _wants_rating_rank_intent(text: str) -> bool:
+    s = _normalize_user_text_for_match(text)
+    if not query_mentions_rating(s) and "sao" not in s:
+        return False
+    if query_wants_high_rating(s) or query_wants_low_rating(s):
+        return True
+    if re.search(r"(cao|thấp|thap|tốt|tot|kém|kem)\s+nhất", s):
+        return True
+    if re.search(r"rating\s+(cao|thấp|thap)", s):
+        return True
+    return False
+
+
+def _answer_rating_rank_vi(message: str) -> str | None:
+    """
+    Answer questions like: smartphone nào rating cao nhất / sách đánh giá thấp nhất trong category.
+    """
+
+    raw = (message or "").strip()
+    if not _wants_rating_rank_intent(raw):
+        return None
+
+    s = _normalize_user_text_for_match(raw)
+    want_low = query_wants_low_rating(s)
+    want_high = query_wants_high_rating(s) or not want_low
+
+    try:
+        allp = list_products()
+    except Exception:  # noqa: BLE001
+        return None
+    if not allp:
+        return None
+
+    dom = _infer_domain(raw)
+    pool = [p for p in allp if _product_matches_domain(p, dom)] if dom else list(allp)
+    pool = _filter_pool_by_category_hint(pool, raw)
+
+    if dom == "book":
+        pool = _filter_books_by_query(pool, raw, focus=s)
+    elif dom == "fashion":
+        pool = _filter_fashion_by_query(pool, raw, focus=s)
+
+    rated = [p for p in pool if product_rating_value(p) > 0]
+    if not rated:
+        scope = (pool[0].category_name if len(pool) == 1 and pool[0].category_name else dom or "phạm vi bạn hỏi")
+        return f"Trong **{scope}** hiện chưa có sản phẩm nào có rating (điểm đánh giá > 0)."
+
+    def sort_key(p: Product) -> tuple:
+        return (product_rating_value(p), product_rating_count(p), -int(p.id))
+
+    rated.sort(key=sort_key, reverse=want_high)
+    direction = "cao nhất" if want_high else "thấp nhất"
+    scope_parts = []
+    if dom:
+        scope_parts.append(
+            {
+                "laptop": "laptop",
+                "smartphone": "smartphone",
+                "audio": "âm thanh",
+                "tablet": "máy tính bảng",
+                "smartwatch": "đồng hồ thông minh",
+                "accessories": "phụ kiện",
+                "book": "sách",
+                "fashion": "thời trang",
+            }.get(dom, dom)
+        )
+    cat_hint = _filter_pool_by_category_hint(pool, raw)
+    if len(cat_hint) < len(pool) and cat_hint and cat_hint[0].category_name:
+        scope_parts.append(cat_hint[0].category_name)
+    scope = " / ".join(scope_parts) if scope_parts else "catalog"
+
+    best = rated[0]
+    lines = [
+        f"Sản phẩm **rating {direction}** trong **{scope}** là:",
+        f"- {format_rating_line(best)}",
+    ]
+    if len(rated) > 1:
+        lines.append("")
+        lines.append(f"Top {min(3, len(rated))} theo rating {'giảm dần' if want_high else 'tăng dần'}:")
+        for i, p in enumerate(rated[:3], 1):
+            lines.append(f"{i}. {format_rating_line(p)}")
+    lines.append("")
+    lines.append("Bạn muốn lọc thêm theo ngân sách hoặc thương hiệu không?")
+    return "\n".join(lines)
+
+
+def _answer_top_rated_suggestions_vi(message: str, products: list[Product] | None = None) -> str | None:
+    """Gợi ý sản phẩm rating cao (không hỏi cao/thấp nhất tuyệt đối)."""
+
+    s = _normalize_user_text_for_match(message)
+    if not query_mentions_rating(s) or _wants_rating_rank_intent(message):
+        return None
+    if not query_wants_high_rating(s) and not any(k in s for k in ["đánh giá tốt", "danh gia tot", "rating tot"]):
+        return None
+
+    prods = products if products is not None else list_products()
+    dom = _infer_domain(message)
+    pool = [p for p in prods if _product_matches_domain(p, dom)] if dom else list(prods)
+    pool = _filter_pool_by_category_hint(pool, message)
+    if dom == "book":
+        pool = _filter_books_by_query(pool, message)
+    elif dom == "fashion":
+        pool = _filter_fashion_by_query(pool, message)
+
+    rated = [p for p in pool if product_rating_value(p) > 0]
+    if not rated:
+        return None
+    rated.sort(key=lambda p: (rating_quality_score(p), product_rating_value(p)), reverse=True)
+    picks = rated[:5]
+    lines = ["Mình gợi ý các sản phẩm **được đánh giá cao** phù hợp câu hỏi của bạn:"]
+    for p in picks:
+        lines.append(f"- {format_rating_line(p)}")
+    lines.append("")
+    lines.append("Bạn muốn xem thêm theo ngân sách hoặc thương hiệu cụ thể không?")
+    return "\n".join(lines)
 
 
 def _answer_compare_vi(message: str, products: list[Product] | None = None) -> str | None:
@@ -717,6 +1098,25 @@ def _answer_compare_vi(message: str, products: list[Product] | None = None) -> s
         f"So sánh nhanh giữa **{a.name}** (product_id: {a.id}) và **{b.name}** (product_id: {b.id}):",
         f"- Giá: {a.price} {a.currency or ''} | {b.price} {b.currency or ''}",
     ]
+    if (a.main_category or "").upper() == "BOOK" or (b.main_category or "").upper() == "BOOK":
+        for label, p in (("A", a), ("B", b)):
+            if p.book:
+                if p.book.author:
+                    lines.append(f"- {label} tác giả: {p.book.author}")
+                if p.book.language:
+                    lines.append(f"- {label} ngôn ngữ: {p.book.language}")
+        lines.append("")
+        lines.append("Bạn muốn ưu tiên thể loại (fiction/non-fiction), ngôn ngữ hay ngân sách để chốt 1 cuốn?")
+        return "\n".join(lines)
+    if (a.main_category or "").upper() == "FASHION" or (b.main_category or "").upper() == "FASHION":
+        for label, p in (("A", a), ("B", b)):
+            if p.fashion:
+                bits = [x for x in (p.fashion.brand, p.fashion.size, p.fashion.gender, p.fashion.color) if x]
+                if bits:
+                    lines.append(f"- {label}: {', '.join(bits)}")
+        lines.append("")
+        lines.append("Bạn muốn ưu tiên size, màu hay thương hiệu để chốt 1 mẫu?")
+        return "\n".join(lines)
     if focus_cam:
         lines.extend(
             [
@@ -846,10 +1246,16 @@ def _should_use_heuristic_first(message: str) -> bool:
     if _wants_catalog_list_all_intent(msg):
         return False
     s = msg.lower()
+    if _wants_rating_rank_intent(msg):
+        return True
     try:
         prods = list_products()
     except Exception:  # noqa: BLE001
         prods = []
+    if _answer_rating_rank_vi(msg):
+        return True
+    if _answer_top_rated_suggestions_vi(msg, prods if prods else None):
+        return True
     if _answer_compare_vi(msg, prods if prods else None):
         return True
     if prods and _answer_availability_vi(msg, prods):
@@ -871,6 +1277,8 @@ def _should_use_heuristic_first(message: str) -> bool:
     )
     want_tablet = any(k in s for k in ["tablet", "ipad", "máy tính bảng", "may tinh bang"])
     want_watch = any(k in s for k in ["smartwatch", "đồng hồ", "dong ho", "watch", "garmin"])
+    want_book = _wants_book_intent(s)
+    want_fashion = _wants_fashion_intent(s)
     want_accessories = _finalize_want_accessories(
         s,
         want_laptop=want_laptop,
@@ -883,6 +1291,8 @@ def _should_use_heuristic_first(message: str) -> bool:
     want_similar = any(k in s for k in ["tương tự", "similar", "giống"])
 
     if want_accessories:
+        return True
+    if want_book or want_fashion:
         return True
     if want_similar:
         return True
@@ -897,6 +1307,14 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
         products = list_products()
     except Exception:  # noqa: BLE001
         products = []
+
+    rank = _answer_rating_rank_vi(msg)
+    if rank:
+        return rank
+
+    top_rated = _answer_top_rated_suggestions_vi(msg, products)
+    if top_rated:
+        return top_rated
 
     cmp = _answer_compare_vi(msg)
     if cmp:
@@ -925,6 +1343,8 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
     want_earbuds = any(k in s for k in ["tai nghe", "earbud", "airpods", "headphone"])
     want_tablet = any(k in s for k in ["tablet", "ipad", "máy tính bảng", "may tinh bang"])
     want_watch = any(k in s for k in ["smartwatch", "đồng hồ", "dong ho", "watch", "garmin"])
+    want_book = _wants_book_intent(s)
+    want_fashion = _wants_fashion_intent(s)
     want_cable = any(k in s for k in ["cáp", "cable", "usb-c", "type c", "type-c", "type‑c"])
     # If message includes "cáp sạc" we should prioritize cable over wall charger.
     want_charger = (any(k in s for k in ["sạc", "charger", "fast charger", "33w", "65w", "củ sạc"]) and not want_cable)
@@ -1041,6 +1461,13 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
             cand = tmp if tmp else cand
     elif want_earbuds:
         cand = [p for p in cand if "audio" in cat(p)]
+    elif want_book:
+        cand = _filter_books_by_query(cand, s, focus=s_head)
+    elif want_fashion:
+        cand = _filter_fashion_by_query(cand, s, focus=s_head)
+    elif query_mentions_rating(s) and query_wants_high_rating(s):
+        rated = [p for p in cand if product_rating_value(p) > 0]
+        cand = sorted(rated, key=lambda p: (rating_quality_score(p), product_rating_value(p)), reverse=True) if rated else cand
 
     # Budget filter
     if budget_min is not None or budget_max is not None:
@@ -1079,12 +1506,17 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
 
     if cand:
         lines = ["Mình gợi ý vài sản phẩm trong shop phù hợp nhu cầu của bạn:"]
+        dom_hint = "book" if want_book else "fashion" if want_fashion else None
         for p in cand:
-            lines.append(f"- {p.name} (product_id: {p.id}) — {p.price} {p.currency or ''}".strip())
+            lines.append(f"- {_format_catalog_line(p, dom_hint)}")
         lines.append("")
         # Ask a single next question without repeating the generic menu.
         # Note: catalog does not store detailed specs (RAM/SSD/battery hours), so we ask clarifying questions.
-        if want_laptop:
+        if want_book:
+            lines.append("Bạn muốn sách tiếng Việt hay tiếng Anh, thể loại fiction/non-fiction, hay có tác giả cụ thể nào?")
+        elif want_fashion:
+            lines.append("Bạn muốn ưu tiên size, màu, giới tính (nam/nữ) hay thương hiệu nào?")
+        elif want_laptop:
             if want_big_ram:
                 lines.append("Bạn cần RAM khoảng bao nhiêu GB (ví dụ 16GB / 32GB)? Mình sẽ gợi ý theo tầm giá + dòng máy phù hợp.")
             elif want_battery:
@@ -1106,10 +1538,21 @@ def _fallback_answer_vi(message: str, history: dict | None = None) -> str:
         return "\n".join(lines)
 
     # If no match, ask clarifying questions
-    qs = [
-        "Bạn cho mình biết ngân sách khoảng bao nhiêu (VD: dưới 7 triệu / 10–15 triệu)?",
-        "Bạn muốn dùng cho nhu cầu chính nào (học tập, chơi game, chụp ảnh, pin trâu)?",
-    ]
+    if want_book:
+        qs = [
+            "Bạn muốn sách thể loại nào (fiction, non-fiction, thiếu nhi)?",
+            "Bạn ưu tiên tiếng Việt hay tiếng Anh, và ngân sách khoảng bao nhiêu?",
+        ]
+    elif want_fashion:
+        qs = [
+            "Bạn đang tìm quần áo, giày hay túi xách?",
+            "Bạn cần size/giới tính nào và ngân sách khoảng bao nhiêu?",
+        ]
+    else:
+        qs = [
+            "Bạn cho mình biết ngân sách khoảng bao nhiêu (VD: dưới 7 triệu / 10–15 triệu)?",
+            "Bạn muốn mua điện tử, sách hay thời trang — và nhu cầu chính là gì?",
+        ]
     return f"Mình chưa tìm được sản phẩm khớp ngay trong dữ liệu shop hiện tại.\n- {qs[0]}\n- {qs[1]}"
 
 

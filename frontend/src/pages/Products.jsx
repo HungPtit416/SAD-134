@@ -3,10 +3,17 @@ import { Link } from 'react-router-dom'
 import { addToCart, aiRecommendations, getStockByProducts, listProducts, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import ProductImage from '../components/ProductImage'
+import ProductRating from '../components/ProductRating'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
 
 const SCROLL_KEY = 'elecshop_products_scroll_y'
+const MAIN_FILTERS = [
+  { id: '', label: 'Tất cả' },
+  { id: 'ELECTRONICS', label: 'Điện tử' },
+  { id: 'BOOK', label: 'Sách' },
+  { id: 'FASHION', label: 'Thời trang' },
+]
 
 export default function Products() {
   const userId = useUserId()
@@ -14,15 +21,16 @@ export default function Products() {
   const [products, setProducts] = useState([])
   const [stockMap, setStockMap] = useState({})
   const [q, setQ] = useState('')
+  const [mainFilter, setMainFilter] = useState('')
   const [recs, setRecs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  async function load() {
+  async function load(categoryFilter = mainFilter) {
     setLoading(true)
     setError('')
     try {
-      const p = await listProducts()
+      const p = await listProducts(categoryFilter || undefined)
       setProducts(p)
       const ids = p.map((x) => x.id)
       if (ids.length) {
@@ -45,9 +53,9 @@ export default function Products() {
   }
 
   useEffect(() => {
-    load()
-    trackEvent(userId, 'browse_products', { metadata: {} })
-  }, [userId])
+    load(mainFilter)
+    trackEvent(userId, 'browse_products', { metadata: { main_category: mainFilter || 'ALL' } })
+  }, [userId, mainFilter])
 
   useEffect(() => {
     const saved = Number(sessionStorage.getItem(SCROLL_KEY) || '0')
@@ -120,9 +128,22 @@ export default function Products() {
       <div className="toolbar">
         <div className="toolbarLeft">
           <div className="pageTitle">Products</div>
-          <div className="pageSubtitle">Browse catalog (category is data)</div>
+          <div className="pageSubtitle">Điện tử · Sách · Thời trang</div>
         </div>
         <div className="toolbarRight">
+          <div className="chipRow" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginRight: 8 }}>
+            {MAIN_FILTERS.map((f) => (
+              <button
+                key={f.id || 'all'}
+                type="button"
+                className={mainFilter === f.id ? 'btn btnPrimary' : 'btn'}
+                onClick={() => setMainFilter(f.id)}
+                disabled={loading}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
           <div className="searchBox">
             <input
               value={q}
@@ -161,6 +182,7 @@ export default function Products() {
                     </div>
                     <div className="miniRecInfo">
                       <div className="miniRecName">{p.name}</div>
+                      <ProductRating rating={p.ratings} count={p.no_of_ratings} compact />
                       <div className="miniRecPrice">{money(p.price, 'VND')}</div>
                       {p?.category?.name ? <div className="mutedSmall">{p.category.name}</div> : null}
                     </div>
@@ -191,6 +213,8 @@ export default function Products() {
                     <div className="priceBlock">
                       <div className="priceNow">{money(p.price, 'VND')}</div>
                     </div>
+                    <ProductRating rating={p.ratings} count={p.no_of_ratings} compact />
+                    {p?.main_category ? <span className="chip">{p.main_category}</span> : null}
                     {p?.category?.name ? <div className="mutedSmall">{p.category.name}</div> : null}
 
                     {left != null && initial != null ? (

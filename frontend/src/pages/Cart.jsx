@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { aiRecommendations, getCart, removeCartItem, setCartItemQuantity, trackEvent } from '../api'
 import { useUserId } from '../components/Layout'
 import ProductImage from '../components/ProductImage'
+import ProductRating from '../components/ProductRating'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/format'
 
@@ -173,6 +174,7 @@ export default function Cart() {
                   </div>
                   <div className="miniRecInfo">
                     <div className="miniRecName">{p.name}</div>
+                    <ProductRating rating={p.ratings} count={p.no_of_ratings} compact />
                     <div className="miniRecPrice">{money(p.price, 'VND')}</div>
                   </div>
                 </Link>

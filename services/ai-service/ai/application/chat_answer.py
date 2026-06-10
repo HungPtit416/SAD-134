@@ -11,6 +11,8 @@ from .chat_heuristics import (
     _extract_product_ids,
     _fallback_answer_vi,
     _filter_and_rerank_retrieved,
+    _filter_books_by_query,
+    _filter_fashion_by_query,
     _infer_domain,
     _is_affirmative_short_reply,
     _is_cable_product,
@@ -19,6 +21,7 @@ from .chat_heuristics import (
     _is_gaming_laptop_product,
     _is_negative_short_reply,
     _load_recent_chat_turns,
+    _answer_rating_rank_vi,
     _maybe_answer_catalog_list_all_vi,
     _name_key,
     _parse_budget_vnd,
@@ -26,7 +29,9 @@ from .chat_heuristics import (
     _product_matches_domain,
     _finalize_want_accessories,
     _should_use_heuristic_first,
+    _wants_book_intent,
     _wants_catalog_list_all_intent,
+    _wants_fashion_intent,
     _summarize_history,
     _wants_gaming_laptop,
 )
@@ -103,6 +108,21 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                 "camera",
                 "chụp",
                 "chup",
+                "tác giả",
+                "tac gia",
+                "author",
+                "tiếng việt",
+                "tieng viet",
+                "tiếng anh",
+                "tieng anh",
+                "size",
+                "cỡ",
+                "co ",
+                "giới tính",
+                "gioi tinh",
+                "nam",
+                "nữ",
+                "nu ",
             ]
         )
         if is_constraint:
@@ -113,6 +133,8 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                 "tablet": "tablet",
                 "smartwatch": "dong ho",
                 "accessories": "phu kien",
+                "book": "sach",
+                "fashion": "thoi trang",
             }.get(domain, "")
             if dom_kw:
                 # Ensure domain keyword is present even if convo_text got trimmed by UI/session logic.
@@ -146,6 +168,8 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                     "tablet": "tablet",
                     "smartwatch": "dong ho",
                     "accessories": "phu kien",
+                    "book": "sach",
+                    "fashion": "thoi trang",
                 }.get(domain or "", "")
                 # Add “more suggestions” hint; keep any constraints from recent convo (e.g. gaming/pin).
                 msg = f"goi y them {dom_kw} phu hop"
@@ -166,6 +190,41 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
 
     def _cat(p: Product) -> str:
         return (p.category_name or "").lower()
+
+    def _product_dict(p: Product) -> dict:
+        row = {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "main_category": p.main_category,
+            "category": p.category_name,
+            "price": p.price,
+            "currency": p.currency,
+            "ratings": p.ratings,
+            "no_of_ratings": p.no_of_ratings,
+            "description": (p.description or "")[:240],
+        }
+        if p.book:
+            row["book"] = {
+                "author": p.book.author,
+                "publisher": p.book.publisher,
+                "language": p.book.language,
+                "isbn": p.book.isbn,
+            }
+        if p.electronics:
+            row["electronics"] = {
+                "brand": p.electronics.brand,
+                "color": p.electronics.color,
+                "warranty_months": p.electronics.warranty_months,
+            }
+        if p.fashion:
+            row["fashion"] = {
+                "brand": p.fashion.brand,
+                "size": p.fashion.size,
+                "color": p.fashion.color,
+                "gender": p.fashion.gender,
+            }
+        return row
 
     def _augment_candidates(msg: str, base: list[dict]) -> list[dict]:
         """
@@ -270,8 +329,10 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
             want_watch=want_watch,
             want_accessories=want_accessories,
         )
+        want_book = _wants_book_intent(s)
+        want_fashion = _wants_fashion_intent(s)
 
-        if not (want_laptop or want_audio or want_phone or want_tablet or want_watch or want_accessories):
+        if not (want_laptop or want_audio or want_phone or want_tablet or want_watch or want_accessories or want_book or want_fashion):
             return base
 
         budget_min, budget_max = _parse_budget_vnd(msg)
@@ -344,6 +405,10 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
                 cand = [p for p in cand if _is_cable_product(p)]
             elif want_charger and not want_case and not want_cable:
                 cand = [p for p in cand if _is_charger_product(p)]
+        elif want_book:
+            cand = _filter_books_by_query(cand, s, focus=s_focus)
+        elif want_fashion:
+            cand = _filter_fashion_by_query(cand, s, focus=s_focus)
 
         if budget_min is not None or budget_max is not None:
             tmp: list[Product] = []
@@ -359,7 +424,7 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
             cand = tmp
 
         want_list_all = _wants_catalog_list_all_intent(msg)
-        explicit_cat = want_laptop or want_audio or want_phone or want_tablet or want_watch or want_accessories
+        explicit_cat = want_laptop or want_audio or want_phone or want_tablet or want_watch or want_accessories or want_book or want_fashion
         gaming = want_laptop and _wants_gaming_laptop(s_focus)
         list_all_mode = explicit_cat and want_list_all
         if gaming and want_list_all:
@@ -379,17 +444,7 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
         for p in scan_slice:
             if int(p.id) in have:
                 continue
-            extra.append(
-                {
-                    "id": p.id,
-                    "name": p.name,
-                    "sku": p.sku,
-                    "category": p.category_name,
-                    "price": p.price,
-                    "currency": p.currency,
-                    "description": (p.description or "")[:240],
-                }
-            )
+            extra.append(_product_dict(p))
             have.add(int(p.id))
             if len(extra) >= max_extra:
                 break
@@ -427,6 +482,12 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
         if want_accessories:
             base2 = [it for it in base if ("accessories" in _base_cat_text(it) or "phụ kiện" in _base_cat_text(it))]
             return extra + base2
+        if want_book:
+            base2 = [it for it in base if str(it.get("main_category") or "").upper() == "BOOK"]
+            return extra + base2
+        if want_fashion:
+            base2 = [it for it in base if str(it.get("main_category") or "").upper() == "FASHION"]
+            return extra + base2
 
         return base + extra
 
@@ -435,23 +496,14 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
     for p in products[:3]:
         try:
             full = get_product(int(p["id"]))
-            picked.append(
-                {
-                    "id": full.id,
-                    "name": full.name,
-                    "sku": full.sku,
-                    "category": full.category_name,
-                    "price": full.price,
-                    "currency": full.currency,
-                    "description": (full.description or "")[:240],
-                }
-            )
+            picked.append(_product_dict(full))
         except Exception:  # noqa: BLE001
             picked.append(p)
     # Use recent conversation to keep topic continuity (e.g., user says "Samsung" then later only "dưới 30 triệu").
     picked = _augment_candidates(f"{msg}\n{convo_text}", picked)
 
     catalog_list_answer = _maybe_answer_catalog_list_all_vi(f"{msg}\n{convo_text}", focus_message=msg)
+    rating_rank_answer = _answer_rating_rank_vi(msg)
 
     retrieved = []
     try:
@@ -543,14 +595,18 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
     }
 
     system = (
-        "Bạn là trợ lý tư vấn mua sắm của ElecShop (sàn thương mại điện tử). "
+        "Bạn là trợ lý tư vấn mua sắm của ElecShop (bán điện tử, sách và thời trang). "
         "Luôn trả lời bằng tiếng Việt. "
         "Chỉ sử dụng thông tin trong phần ngữ cảnh được cung cấp (hành vi người dùng, đồ thị gợi ý, các chunks đã truy xuất, danh sách sản phẩm gợi ý). "
         "Tuyệt đối không bịa thông tin (giá, cấu hình, tồn kho) nếu không thấy trong ngữ cảnh. "
         "Nếu ngữ cảnh chưa đủ để trả lời chắc chắn, hãy hỏi 1-2 câu hỏi làm rõ. "
         "Tránh lặp lại cùng một câu hỏi nhiều lần; nếu người dùng trả lời 'có/ok/yes' sau khi bạn hỏi có muốn xem thêm gợi ý, hãy đưa thêm gợi ý ngay. "
         "Khi đề xuất sản phẩm, ưu tiên các mục trong Candidate products; nếu người dùng yêu cầu liệt kê đầy đủ "
-        "thì liệt kê tất cả các mục đó (kèm product_id). Nếu không, đưa 2–4 lựa chọn phù hợp nhất."
+        "thì liệt kê tất cả các mục đó (kèm product_id). Nếu không, đưa 2–4 lựa chọn phù hợp nhất. "
+        "Với sách: nêu tác giả/ngôn ngữ/thể loại nếu có trong ngữ cảnh. "
+        "Với thời trang: nêu brand/size/gender/màu nếu có. "
+        "Với điện tử: nêu hãng/dòng máy nếu có. "
+        "Khi người dùng hỏi rating cao/thấp nhất trong category, chỉ dùng điểm rating và số lượt đánh giá trong ngữ cảnh."
     )
     # Keep prompt compact to reduce off-topic answers.
     user = (
@@ -564,6 +620,8 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
 
     if catalog_list_answer is not None:
         answer = catalog_list_answer
+    elif rating_rank_answer is not None:
+        answer = rating_rank_answer
     elif force_heuristic or _should_use_heuristic_first(logic_text):
         answer = _fallback_answer_vi(logic_text, history=history)
     else:
@@ -576,7 +634,7 @@ def answer_chat(user_id: str, message: str, *, session_id: str = "default") -> C
     # Guardrail: if the assistant suggests product_ids from the wrong domain, fall back to deterministic in-shop suggestions.
     # Skip when we already answered from full-catalog heuristics: `domain` may still reflect an older turn (e.g. laptop)
     # while the deterministic list used the domain from the current question (e.g. smartphone).
-    if catalog_list_answer is None:
+    if catalog_list_answer is None and rating_rank_answer is None:
         try:
             ids = _extract_product_ids(answer)
             if ids and domain:

@@ -16,17 +16,36 @@ class IndexResult:
 
 def _product_to_doc(p) -> tuple[str, str, str, dict]:
     title = p.name
-    content = "\n".join(
-        [
-            f"Name: {p.name}",
-            f"SKU: {p.sku or ''}",
-            f"Category: {p.category_name or ''}",
-            f"Price: {p.price or ''} {p.currency or ''}".strip(),
-            "",
-            (p.description or ""),
-        ]
-    ).strip()
-    meta = {"sku": p.sku, "category": p.category_name, "currency": p.currency, "price": p.price}
+    lines = [
+        f"Name: {p.name}",
+        f"SKU: {p.sku or ''}",
+        f"Main category: {p.main_category or ''}",
+        f"Category: {p.category_name or ''}",
+        f"Price: {p.price or ''} {p.currency or ''}".strip(),
+        f"Rating: {p.ratings or 0}/5 ({p.no_of_ratings or 0} reviews)",
+    ]
+    if p.book:
+        lines.append(f"Author: {p.book.author or ''}")
+        lines.append(f"Publisher: {p.book.publisher or ''}")
+        lines.append(f"Language: {p.book.language or ''}")
+    if p.electronics:
+        lines.append(f"Brand: {p.electronics.brand or ''}")
+        lines.append(f"Color: {p.electronics.color or ''}")
+    if p.fashion:
+        lines.append(f"Brand: {p.fashion.brand or ''}")
+        lines.append(f"Size: {p.fashion.size or ''}")
+        lines.append(f"Gender: {p.fashion.gender or ''}")
+    lines.extend(["", (p.description or "")])
+    content = "\n".join(lines).strip()
+    meta = {
+        "sku": p.sku,
+        "category": p.category_name,
+        "main_category": p.main_category,
+        "currency": p.currency,
+        "price": p.price,
+        "ratings": p.ratings,
+        "no_of_ratings": p.no_of_ratings,
+    }
     return title, content, f"{p.id}", meta
 
 

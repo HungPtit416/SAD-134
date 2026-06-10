@@ -215,13 +215,32 @@ export async function trackEvent(userId, eventType, payload) {
   }
 }
 
-export async function listProducts() {
-  const data = await httpJson(`${PRODUCT_API}/api/products/`)
+export async function listProducts(mainCategory) {
+  const qs =
+    mainCategory != null && String(mainCategory).trim()
+      ? `?main_category=${encodeURIComponent(String(mainCategory).trim().toUpperCase())}`
+      : ''
+  const data = await httpJson(`${PRODUCT_API}/api/products/${qs}`)
   return Array.isArray(data) ? data : data?.results || []
 }
 
-export async function getProduct(productId) {
-  return await httpJson(`${PRODUCT_API}/api/products/${productId}/`)
+export async function getProduct(productId, userId) {
+  const qs =
+    userId && String(userId).trim() && String(userId).trim().toLowerCase() !== 'guest'
+      ? `?user_id=${encodeURIComponent(String(userId).trim())}`
+      : ''
+  return await httpJson(`${PRODUCT_API}/api/products/${productId}/${qs}`)
+}
+
+export async function rateProduct(userId, productId, stars) {
+  const qs = userId ? `?user_id=${encodeURIComponent(String(userId))}` : ''
+  const res = await httpJson(`${PRODUCT_API}/api/products/${productId}/rate/${qs}`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ stars }),
+  })
+  trackEvent(userId, 'rate', { product_id: productId, metadata: { stars } })
+  return res
 }
 
 export async function listCategories() {

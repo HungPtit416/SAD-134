@@ -1,27 +1,67 @@
 from decimal import Decimal
 
-from .models import Category, Product
+from .models import Book, Category, Electronics, Fashion, Product
+
+
+def _brand_from_name(name: str) -> str:
+    n = (name or "").lower()
+    for brand in (
+        "Apple",
+        "Samsung",
+        "Xiaomi",
+        "ASUS",
+        "Dell",
+        "HP",
+        "Lenovo",
+        "Acer",
+        "LG",
+        "Sony",
+        "JBL",
+        "Logitech",
+        "Anker",
+        "Garmin",
+        "Bose",
+        "Google",
+        "OnePlus",
+        "OPPO",
+        "realme",
+    ):
+        if brand.lower() in n:
+            return brand
+    return ""
 
 
 def seed() -> None:
     categories = [
-        ("Smartphone", "smartphone"),
-        ("Laptop", "laptop"),
-        ("Tablet", "tablet"),
-        ("Smartwatch", "smartwatch"),
-        ("Audio", "audio"),
-        ("Accessories", "accessories"),
+        ("Smartphone", "smartphone", "electronics"),
+        ("Laptop", "laptop", "electronics"),
+        ("Tablet", "tablet", "electronics"),
+        ("Smartwatch", "smartwatch", "electronics"),
+        ("Audio", "audio", "electronics"),
+        ("Accessories", "accessories", "electronics"),
+        ("Fiction", "fiction", "book"),
+        ("Non-fiction", "non-fiction", "book"),
+        ("Children", "children", "book"),
+        ("Clothing", "clothing", "fashion"),
+        ("Shoes", "shoes", "fashion"),
+        ("Bags", "bags", "fashion"),
     ]
 
     cat_by_slug: dict[str, Category] = {}
-    for name, slug in categories:
-        c, _ = Category.objects.get_or_create(slug=slug, defaults={"name": name})
+    for name, slug, tag in categories:
+        c, _ = Category.objects.get_or_create(slug=slug, defaults={"name": name, "tag": tag})
+        updates = {}
         if c.name != name:
-            c.name = name
-            c.save(update_fields=["name"])
+            updates["name"] = name
+        if (c.tag or "") != tag:
+            updates["tag"] = tag
+        if updates:
+            for k, v in updates.items():
+                setattr(c, k, v)
+            c.save(update_fields=list(updates.keys()))
         cat_by_slug[slug] = c
 
-    products = [
+    electronics_products = [
         ("IP14-128-BLK", "iPhone 14 128GB Black", "Apple smartphone with 128GB storage.", "16990000", "VND", "smartphone"),
         ("XM-RN13-256", "Xiaomi Redmi Note 13 256GB", "Affordable Android smartphone.", "5990000", "VND", "smartphone"),
         ("LAP-GAME-15", "Gaming Laptop 15-inch", "Laptop for gaming and high performance workloads.", "21990000", "VND", "laptop"),
@@ -45,7 +85,6 @@ def seed() -> None:
         ("CABLE-USB-C", "USB-C Fast Charging Cable", "Durable 1m cable.", "99000", "VND", "accessories"),
         ("CASE-IP15", "iPhone 15 Case", "Protective case.", "199000", "VND", "accessories"),
         ("CHARGER-33W", "33W Fast Charger", "Fast wall charger.", "249000", "VND", "accessories"),
-        # --- Extra catalog for richer demos ---
         ("SS-A55-256", "Samsung Galaxy A55 5G 256GB", "Mid-range Samsung phone with strong battery.", "9990000", "VND", "smartphone"),
         ("SS-S23U-256", "Samsung Galaxy S23 Ultra 256GB", "Flagship phone with great zoom camera.", "23990000", "VND", "smartphone"),
         ("PIXEL-8-128", "Google Pixel 8 128GB", "Camera-focused Android phone.", "13990000", "VND", "smartphone"),
@@ -67,9 +106,134 @@ def seed() -> None:
         ("HUB-USB-C-7IN1", "USB-C Hub 7-in-1", "HDMI + USB + SD adapter.", "499000", "VND", "accessories"),
         ("MOUSE-LOGI-MX3S", "Logitech MX Master 3S", "Ergonomic wireless mouse.", "2490000", "VND", "accessories"),
         ("KB-LOGI-K380", "Logitech K380", "Compact multi-device keyboard.", "790000", "VND", "accessories"),
+        ("IP-15-PLUS", "Iphone 15 Plus", "Sản phẩm iPhone đời mới", "1999000", "VND", "smartphone"),
     ]
 
-    for sku, name, description, price, currency, cat_slug in products:
+    book_products = [
+        (
+            "BOOK-DUNE",
+            "Dune",
+            "Epic science fiction novel set on desert planet Arrakis.",
+            "320000",
+            "VND",
+            "fiction",
+            {"author": "Frank Herbert", "publisher": "Ace Books", "isbn": "9780441172719", "language": "English"},
+        ),
+        (
+            "BOOK-1984",
+            "1984",
+            "Dystopian classic about totalitarian surveillance.",
+            "280000",
+            "VND",
+            "fiction",
+            {"author": "George Orwell", "publisher": "Secker & Warburg", "isbn": "9780451524935", "language": "English"},
+        ),
+        (
+            "BOOK-SAPIENS",
+            "Sapiens: A Brief History of Humankind",
+            "Non-fiction exploring human history and evolution.",
+            "450000",
+            "VND",
+            "non-fiction",
+            {"author": "Yuval Noah Harari", "publisher": "Harper", "isbn": "9780062316097", "language": "English"},
+        ),
+        (
+            "BOOK-ATOMIC",
+            "Atomic Habits",
+            "Practical guide to building good habits.",
+            "390000",
+            "VND",
+            "non-fiction",
+            {"author": "James Clear", "publisher": "Avery", "isbn": "9780735211292", "language": "English"},
+        ),
+        (
+            "BOOK-HARRY1",
+            "Harry Potter and the Philosopher's Stone",
+            "First book in the beloved fantasy series.",
+            "350000",
+            "VND",
+            "children",
+            {"author": "J.K. Rowling", "publisher": "Bloomsbury", "isbn": "9780747532699", "language": "English"},
+        ),
+        (
+            "BOOK-DE-MAY",
+            "Đắc Nhân Tâm",
+            "Sách kinh điển về nghệ thuật ứng xử và thu phục lòng người.",
+            "89000",
+            "VND",
+            "non-fiction",
+            {"author": "Dale Carnegie", "publisher": "First News", "isbn": "9786041234567", "language": "Vietnamese"},
+        ),
+    ]
+
+    fashion_products = [
+        (
+            "FASH-TSHIRT-M",
+            "Uniqlo Cotton T-Shirt",
+            "Basic crew-neck cotton tee for everyday wear.",
+            "199000",
+            "VND",
+            "clothing",
+            {"brand": "Uniqlo", "size": "M", "color": "White", "gender": "Unisex"},
+        ),
+        (
+            "FASH-JEANS-32",
+            "Levi's 501 Original Jeans",
+            "Classic straight-fit denim jeans.",
+            "1299000",
+            "VND",
+            "clothing",
+            {"brand": "Levi's", "size": "32", "color": "Indigo", "gender": "Men"},
+        ),
+        (
+            "FASH-DRESS-S",
+            "Zara Floral Midi Dress",
+            "Light floral dress for summer occasions.",
+            "899000",
+            "VND",
+            "clothing",
+            {"brand": "Zara", "size": "S", "color": "Floral", "gender": "Women"},
+        ),
+        (
+            "FASH-SNEAKER-42",
+            "Nike Air Force 1",
+            "Iconic white sneakers with classic silhouette.",
+            "2799000",
+            "VND",
+            "shoes",
+            {"brand": "Nike", "size": "42", "color": "White", "gender": "Unisex"},
+        ),
+        (
+            "FASH-LOAFER-41",
+            "Clarks Leather Loafers",
+            "Comfortable leather loafers for office wear.",
+            "1899000",
+            "VND",
+            "shoes",
+            {"brand": "Clarks", "size": "41", "color": "Brown", "gender": "Men"},
+        ),
+        (
+            "FASH-BAG-TOTE",
+            "Coach Tote Bag",
+            "Spacious leather tote for daily use.",
+            "4599000",
+            "VND",
+            "bags",
+            {"brand": "Coach", "size": "One Size", "color": "Tan", "gender": "Women"},
+        ),
+    ]
+
+    def upsert_product(
+        sku,
+        name,
+        description,
+        price,
+        currency,
+        cat_slug,
+        main_category,
+        *,
+        subtype_defaults=None,
+    ):
         category = cat_by_slug.get(cat_slug)
         p, created = Product.objects.get_or_create(
             sku=sku,
@@ -79,11 +243,12 @@ def seed() -> None:
                 "price": Decimal(price),
                 "currency": currency,
                 "category": category,
+                "main_category": main_category,
                 "is_active": True,
+                "ratings": 0,
+                "no_of_ratings": 0,
             },
         )
-        if created:
-            continue
         updates = {}
         if p.name != name:
             updates["name"] = name
@@ -95,8 +260,68 @@ def seed() -> None:
             updates["currency"] = currency
         if p.category_id != (category.id if category else None):
             updates["category"] = category
+        if p.main_category != main_category:
+            updates["main_category"] = main_category
         if updates:
             for k, v in updates.items():
                 setattr(p, k, v)
             p.save(update_fields=list(updates.keys()))
 
+        subtype_defaults = subtype_defaults or {}
+        if main_category == Product.MAIN_CATEGORY_ELECTRONICS:
+            brand = subtype_defaults.get("brand") or _brand_from_name(name)
+            Electronics.objects.update_or_create(
+                product=p,
+                defaults={
+                    "brand": brand,
+                    "color": subtype_defaults.get("color", ""),
+                    "warranty_months": subtype_defaults.get("warranty_months", 12),
+                },
+            )
+        elif main_category == Product.MAIN_CATEGORY_BOOK:
+            Book.objects.update_or_create(product=p, defaults=subtype_defaults)
+        elif main_category == Product.MAIN_CATEGORY_FASHION:
+            Fashion.objects.update_or_create(product=p, defaults=subtype_defaults)
+        return p
+
+    for sku, name, description, price, currency, cat_slug in electronics_products:
+        upsert_product(
+            sku,
+            name,
+            description,
+            price,
+            currency,
+            cat_slug,
+            Product.MAIN_CATEGORY_ELECTRONICS,
+        )
+
+    for sku, name, description, price, currency, cat_slug, book_fields in book_products:
+        upsert_product(
+            sku,
+            name,
+            description,
+            price,
+            currency,
+            cat_slug,
+            Product.MAIN_CATEGORY_BOOK,
+            subtype_defaults=book_fields,
+        )
+
+    for sku, name, description, price, currency, cat_slug, fashion_fields in fashion_products:
+        upsert_product(
+            sku,
+            name,
+            description,
+            price,
+            currency,
+            cat_slug,
+            Product.MAIN_CATEGORY_FASHION,
+            subtype_defaults=fashion_fields,
+        )
+
+    # Backfill electronics profile for any legacy product missing subtype row.
+    for p in Product.objects.filter(main_category=Product.MAIN_CATEGORY_ELECTRONICS):
+        try:
+            p.electronics
+        except Electronics.DoesNotExist:
+            Electronics.objects.create(product=p, brand=_brand_from_name(p.name), warranty_months=12)
