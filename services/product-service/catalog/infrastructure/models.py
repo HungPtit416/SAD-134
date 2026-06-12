@@ -43,21 +43,23 @@ class Product(models.Model):
         return f"{self.sku} - {self.name}"
 
 
-class ProductReview(models.Model):
-    user_id = models.CharField(max_length=128, db_index=True)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+class ProductRating(models.Model):
+    user_id = models.PositiveBigIntegerField(db_index=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_ratings")
     stars = models.PositiveSmallIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        verbose_name = "Product rating"
+        verbose_name_plural = "Product ratings"
         constraints = [
             models.UniqueConstraint(fields=["user_id", "product"], name="uniq_product_review_per_user"),
         ]
         ordering = ["-updated_at"]
 
     def __str__(self) -> str:
-        return f"Review(user={self.user_id}, product={self.product_id}, stars={self.stars})"
+        return f"Rating(user={self.user_id}, product={self.product_id}, stars={self.stars})"
 
 
 class Book(models.Model):

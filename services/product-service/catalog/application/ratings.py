@@ -1,10 +1,10 @@
 from django.db.models import Avg, Count
 
-from ..infrastructure.models import Product, ProductReview
+from ..infrastructure.models import Product, ProductRating
 
 
 def refresh_product_ratings(product_id: int) -> None:
-    agg = ProductReview.objects.filter(product_id=product_id).aggregate(
+    agg = ProductRating.objects.filter(product_id=product_id).aggregate(
         avg=Avg("stars"),
         count=Count("id"),
     )
@@ -16,11 +16,11 @@ def refresh_product_ratings(product_id: int) -> None:
     )
 
 
-def upsert_product_review(*, user_id: str, product_id: int, stars: int) -> ProductReview:
-    review, _ = ProductReview.objects.update_or_create(
+def upsert_product_rating(*, user_id: int, product_id: int, stars: int) -> ProductRating:
+    rating, _ = ProductRating.objects.update_or_create(
         user_id=user_id,
         product_id=product_id,
         defaults={"stars": stars},
     )
     refresh_product_ratings(product_id)
-    return review
+    return rating

@@ -76,10 +76,10 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ["ratings", "no_of_ratings", "my_rating"]
 
     def get_my_rating(self, obj: Product):
-        user_id = (self.context.get("user_id") or "").strip().lower()
-        if not user_id or user_id == "guest":
+        user_id = self.context.get("user_id")
+        if not isinstance(user_id, int) or user_id <= 0:
             return None
-        review = obj.reviews.filter(user_id=user_id).first()
+        review = obj.product_ratings.filter(user_id=user_id).first()
         return review.stars if review else None
 
     def get_book(self, obj: Product):

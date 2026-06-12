@@ -3,24 +3,36 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from ..application.ratings import upsert_product_review
-from ..infrastructure.models import Book, Category, Electronics, Fashion, Product, ProductReview
+from ..application.ratings import upsert_product_rating
+from ..infrastructure.models import Book, Category, Electronics, Fashion, Product, ProductRating
 from .permissions import StaffWritePermission
 from .serializers import CategorySerializer, ProductRateSerializer, ProductSerializer
 
 
-def _get_user_id(request) -> str | None:
-    hdr = (request.headers.get("X-User-Id") or "").strip().lower()
-    if hdr and hdr != "guest":
+def _coerce_user_id(value) -> int | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() == "guest":
+        return None
+    try:
+        user_id = int(text)
+    except (TypeError, ValueError):
+        return None
+    return user_id if user_id > 0 else None
+
+
+def _get_user_id(request) -> int | None:
+    hdr = _coerce_user_id(request.headers.get("X-User-Id"))
+    if hdr is not None:
         return hdr
-    qp = (request.query_params.get("user_id") or "").strip().lower()
-    if qp and qp != "guest":
+    qp = _coerce_user_id(request.query_params.get("user_id"))
+    if qp is not None:
         return qp
     body = request.data.get("user_id") if hasattr(request, "data") else None
-    if body is not None:
-        s = str(body).strip().lower()
-        if s and s != "guest":
-            return s
+    body_id = _coerce_user_id(body)
+    if body_id is not None:
+        return body_id
     return None
 
 
@@ -59,7 +71,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         ser = ProductRateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         stars = ser.validated_data["stars"]
-        upsert_product_review(user_id=user_id, product_id=product.id, stars=stars)
+        upsert_product_rating(user_id=user_id, product_id=product.id, stars=stars)
         product.refresh_from_db()
         data = ProductSerializer(product, context={"user_id": user_id}).data
         return Response(data)
@@ -69,5 +81,5 @@ class ProductViewSet(viewsets.ModelViewSet):
         user_id = _get_user_id(request)
         if not user_id:
             return Response({"stars": None})
-        review = ProductReview.objects.filter(product_id=pk, user_id=user_id).first()
+        review = ProductRating.objects.filter(product_id=pk, user_id=user_id).first()
         return Response({"stars": review.stars if review else None})
