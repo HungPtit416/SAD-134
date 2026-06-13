@@ -43,6 +43,29 @@ This export expands:
 
 Use the dense Cypher file in Neo4j Browser for a crowded screenshot-friendly graph.
 
+### KB_Graph snapshot export
+
+If you want to export the current graph already stored in Neo4j into CSV snapshot files, run:
+
+```bash
+python manage.py export_kb_graph_snapshot --out-dir /app/reports
+```
+
+Outputs:
+- `/app/reports/kb_graph_snapshot.csv`
+
+This is the best option if you want the graph you already see in Neo4j to become a single CSV source snapshot for later regeneration.
+
+### KB_Graph snapshot import
+
+If you want to load the snapshot CSV back into Neo4j, run:
+
+```bash
+python manage.py import_kb_graph_snapshot --file /app/reports/kb_graph_snapshot.csv
+```
+
+This reads the mixed `NODE`/`EDGE` rows from the snapshot CSV and MERGE-s them back into Neo4j.
+
 ### Phase 4: GraphRAG evidence export (JSON)
 
 Run inside the `ai-service` container:
