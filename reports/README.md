@@ -14,6 +14,35 @@ Outputs:
 - `/app/reports/kb_graph_sample_20_edges.csv` (copy 20 lines into the report)
 - `/app/reports/kb_graph_visualize.cypher` (open in Neo4j Browser, run, then screenshot the graph)
 
+### KB_Graph dense export
+
+If you want a much denser graph with more nodes and edges around one user, run:
+
+```bash
+python manage.py export_kb_graph_dense --user-id user-0001 --limit 30 --neighbor-limit 10 --product-limit 30 --similar-limit 50 --category-limit 30 --out-dir /app/reports
+```
+
+If you want a self-contained showcase graph that seeds extra demo users, ratings, and a category hub for Browser screenshots, run:
+
+```bash
+python manage.py export_kb_graph_dense --showcase --out-dir /app/reports
+```
+
+Outputs:
+- `/app/reports/kb_graph_dense_nodes.csv`
+- `/app/reports/kb_graph_dense_edges.csv`
+- `/app/reports/kb_graph_dense_visualize.cypher`
+
+This export expands:
+- direct user interactions and searches
+- co-occurrence neighbor users
+- neighbor user products and queries
+- product categories
+- product similarity edges
+- demo users, rating nodes, and a dense similarity mesh when `--showcase` is enabled
+
+Use the dense Cypher file in Neo4j Browser for a crowded screenshot-friendly graph.
+
 ### Phase 4: GraphRAG evidence export (JSON)
 
 Run inside the `ai-service` container:
@@ -61,4 +90,3 @@ LIMIT 20;
 Open: `http://localhost:7474`
 - user: `neo4j`
 - password: `neo4j-password`
-
